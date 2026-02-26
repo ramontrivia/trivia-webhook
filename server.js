@@ -1,12 +1,11 @@
 const express = require("express");
-const app = express();
+const axios = require("axios");
 
+const app = express();
 app.use(express.json());
 
-// Health check
 app.get("/", (req, res) => res.status(200).send("OK - webhook online"));
 
-// ✅ VERIFICAÇÃO DO WEBHOOK (META CHAMA ISSO NO BOTÃO “Verificar e salvar”)
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -18,11 +17,41 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// ✅ RECEBIMENTO DE EVENTOS (mensagens/status etc.)
-app.post("/webhook", (req, res) => {
-  console.log("WEBHOOK RECEBIDO:", JSON.stringify(req.body, null, 2));
-  return res.sendStatus(200);
+app.post("/webhook", async (req, res) => {
+  try {
+    const entry = req.body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const message = changes?.value?.messages?.[0];
+
+    if (message && message.type === "text") {
+      const from = message.from;
+      const text = message.text.body;
+
+      console.log("Mensagem recebida:", text);
+
+      await axios.post(
+        `https://graph.facebook.com/v25.0/${process.env.PHONE_NUMBER_ID}/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: from,
+          type: "text",
+          text: { body: `TRIVIA recebeu: "${text}"` }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("Erro ao responder:", error.response?.data || error.message);
+    res.sendStatus(500);
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => console.log("Rodando na porta", PORT));
+app.listen(PORT, "0.0.0.0", () => console.log("Servidor rodando"));

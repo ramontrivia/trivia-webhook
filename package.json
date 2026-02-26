@@ -1,26 +1,7 @@
-# 1) IDs
-$phoneId = "938629096008107"   # CONFIRME se esse é mesmo seu Phone Number ID
-$to      = "5531999646223"
+1.3) Subir isso no GitHub (rápido)
 
-# 2) Headers (token já deve estar salvo em $token)
-$headers = @{
-  "Authorization" = "Bearer $token"
-  "Content-Type"  = "application/json"
-}
+Entre no GitHub
 
-# 3) Body (template)
-$body = @{
-  messaging_product = "whatsapp"
-  to = $to
-  type = "template"
-  template = @{
-    name = "triviateste"
-    language = @{ code = "pt_BR" }
-  }
-} | ConvertTo-Json -Depth 10
+Crie um repositório novo (ex: trivia-webhook)
 
-# 4) Enviar
-Invoke-RestMethod -Method Post `
-  -Uri "https://graph.facebook.com/v22.0/$phoneId/messages" `
-  -Headers $headers `
-  -Body $body
+Faça upload desses arquivos (pelo botão “Add file” → “Upload files”)

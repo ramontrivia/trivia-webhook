@@ -7,372 +7,371 @@ const OpenAI = require("openai");
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
-/**
- * ENV
- */
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// ===== ENV =====
+const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").trim();
+const WHATSAPP_TOKEN = (process.env.WHATSAPP_TOKEN || "").trim();
+const PHONE_NUMBER_ID = (process.env.PHONE_NUMBER_ID || "").trim();
+const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
 
-const BRAND = process.env.TRIVIA_BRAND || "TRÍVIA";
-const PHRASE = process.env.TRIVIA_PHRASE || "tecnologia que responde";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const GRAPH_VERSION = (process.env.GRAPH_VERSION || "v20.0").trim();
+const OPENAI_MODEL = (process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
 
-if (!VERIFY_TOKEN) console.warn("⚠️ Missing env VERIFY_TOKEN");
-if (!WHATSAPP_TOKEN) console.warn("⚠️ Missing env WHATSAPP_TOKEN");
-if (!PHONE_NUMBER_ID) console.warn("⚠️ Missing env PHONE_NUMBER_ID");
-if (!OPENAI_API_KEY) console.warn("⚠️ Missing env OPENAI_API_KEY");
-
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-
-/**
- * SYSTEM PROMPT (TRAVA + PERSONALIDADE)
- */
-const SYSTEM_PROMPT = `
-Você é a ${BRAND} — "${PHRASE}".
-
-OBJETIVO
-Criar uma experiência MUITO humana, rápida e surpreendente no WhatsApp,
-mas sempre com foco comercial: mostrar como a ${BRAND} resolve atendimento.
-
-ESCOPO PERMITIDO (VOCÊ SÓ PODE FALAR DISSO)
-- ${BRAND}: o que é, como funciona, benefícios, diferenciais, implantação, segurança, privacidade e limites.
-- Atendimento no WhatsApp: triagem, organização, direcionamento para humano, captura de dados, automações.
-- Módulos: agendamento, pedidos, orçamentos, relatórios, encaminhamento para equipe humana, integrações (CRM/planilha/DB/API).
-- Métricas: volume de mensagens, tempo de resposta, filas, tags, relatórios.
-- Marketing digital (se fizer parte do pacote): gestão de Instagram/Facebook e captação/organização de leads.
-
-ESCOPO PROIBIDO
-- Vida pessoal, espiritualidade, saúde, casamento, política, receitas, notícias e qualquer assunto fora do escopo acima.
-- Você NÃO é assistente geral e NÃO é banco de dados de consulta.
-
-QUANDO FOR FORA DO ESCOPO
-- Seja simpática e curta.
-- Não responda o assunto.
-- Redirecione para TRÍVIA com UMA pergunta objetiva.
-
-PERSONALIDADE
-- humana, natural, elegante
-- humor leve e inteligente (0 a 1 emoji por mensagem)
-- sem robô, sem questionário, sem repetir frases
-- no máximo 1 pergunta por vez quando fizer sentido
-
-ANTI-LOOP
-- Nunca repita o mesmo parágrafo/pergunta em sequência.
-- Se o usuário disser "tá tudo ok / vim só testar", aceite e faça uma demonstração curta e divertida (sem insistir em dor).
-
-FORMATO
-- PT-BR
-- Mensagens curtas (2 a 6 linhas)
-- 0 a 1 emoji por mensagem
-`;
-
-/**
- * MEMÓRIA SIMPLES POR USUÁRIO (em RAM)
- * (para produção maior: usar Redis/DB)
- */
-const sessions = new Map();
-/**
- * Deduplicação por message.id (evita responder duas vezes a mesma entrega)
- */
-const recentMessageIds = new Map(); // id -> timestamp
-const DEDUPE_TTL_MS = 10 * 60 * 1000; // 10 min
-
-function now() {
-  return Date.now();
+if (!VERIFY_TOKEN || !WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
+  console.warn("⚠️ Faltando env: VERIFY_TOKEN / WHATSAPP_TOKEN / PHONE_NUMBER_ID");
+}
+if (!OPENAI_API_KEY) {
+  console.warn("⚠️ Faltando env: OPENAI_API_KEY (IA não vai responder com OpenAI)");
 }
 
-function cleanupDedupe() {
-  const t = now();
-  for (const [id, ts] of recentMessageIds.entries()) {
-    if (t - ts > DEDUPE_TTL_MS) recentMessageIds.delete(id);
-  }
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+
+// ===== Util =====
+const norm = (s) => (s || "").toString().trim();
+const lower = (s) => norm(s).toLowerCase();
+
+function isGreeting(t) {
+  const x = lower(t);
+  return ["oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "eai", "e aí", "opa"].includes(x);
 }
 
-function getSession(userId) {
-  if (!sessions.has(userId)) {
-    sessions.set(userId, {
-      createdAt: now(),
-      greeted: false,
-      lastAssistant: "",
-      turns: [], // {role, content}
-    });
-  }
-  return sessions.get(userId);
+function isIdentityQuestion(t) {
+  // Perguntas diretas sobre ser IA/robô
+  const x = lower(t);
+  const patterns = [
+    "você é ia",
+    "vc é ia",
+    "voce é ia",
+    "isso é ia",
+    "é ia",
+    "é um robô",
+    "é um robo",
+    "você é robô",
+    "vc é robô",
+    "você é uma máquina",
+    "é uma máquina",
+    "é uma pessoa",
+    "é humano",
+    "é atendente real",
+    "é bot",
+    "é chatbot",
+  ];
+  return patterns.some((p) => x.includes(p));
 }
 
-/**
- * FILTRO / TRAVA DE ESCOPO
- */
+// ===== Trava de escopo (hard gate) =====
+// Regra: se NÃO estiver no universo TRÍVIA/atendimento/automação, a Mel NÃO responde o tema.
+// Ela redireciona com elegância para atendimento/rotina do negócio.
 function isInTriviaScope(text) {
-  const t = (text || "").toLowerCase();
+  const t = lower(text);
+
+  // Permite saudações e frases curtas (pra conversa fluir)
+  if (t.length <= 14) return true;
 
   const allowed = [
-    "trivia", "trívia", "atendimento", "whatsapp", "chat", "chatbot",
-    "automação", "automacao", "triagem", "fila", "sac", "suporte",
+    // TRÍVIA / serviço
+    "trívia", "trivia", "mel", "atendimento", "cliente", "whatsapp", "wpp", "whats",
+    "automação", "automacao", "bot", "chatbot", "triagem", "fila", "sac", "suporte",
     "agendamento", "agenda", "pedido", "pedidos", "orçamento", "orcamento",
-    "relatório", "relatorio", "crm", "lead", "funil", "instagram", "facebook",
-    "meta", "api", "integração", "integracao", "número", "numero",
-    "mensagem", "mensagens", "humano", "humanizado", "equipe", "encaminhar",
-    "tempo de resposta", "sla", "métrica", "metricas", "dashboard", "planos",
-    "módulo", "modulo", "implantação", "implantacao", "setup", "configurar",
-    "preço", "preco", "custo", "cobrança", "cobranca", "token", "webhook",
-    "central", "responder", "resposta", "automático", "automatico", "cliente",
-    "atender", "atendimento inteligente", "whatsapp business"
+    "relatório", "relatorio", "módulo", "modulo", "plano", "planos", "preço", "preco",
+    "valor", "mensalidade", "contratar", "implantação", "implantacao", "setup",
+    "integração", "integracao", "api", "meta", "cloud api", "business", "crm",
+    "lead", "leads", "funil", "instagram", "facebook", "marketing", "direct", "dm",
+    "responder", "resposta", "mensagem", "mensagens", "padrão", "padrao", "tempo de resposta",
+    "sla", "organizar", "organização", "organizacao", "equipe", "encaminhar", "humano",
   ];
 
-  // Exemplos comuns fora do escopo (não precisa ser perfeito — é só “puxar de volta”)
-  const blocked = [
-    "casar", "casamento", "namoro", "religião", "religiao", "espiritual",
-    "deus", "bíblia", "biblia", "política", "politica",
-    "receita", "carne", "dieta", "saúde", "saude", "doença", "doenca",
-    "remédio", "remedio", "futebol", "jogo", "notícia", "noticia",
-    "horóscopo", "horoscopo", "tarot", "investimento", "bitcoin"
-  ];
-
-  const hasAllowed = allowed.some((k) => t.includes(k));
-  const hasBlocked = blocked.some((k) => t.includes(k));
-
-  if (hasBlocked && !hasAllowed) return false;
-  if (hasAllowed) return true;
-
-  // Mensagens curtas tipo "oi", "ola", "bom dia" -> a gente permite (saudação)
-  if (t.trim().length <= 12) return true;
-
-  // Neutro -> trava (evita virar “ChatGPT geral”)
-  return false;
+  return allowed.some((k) => t.includes(k));
 }
 
 function outOfScopeReply() {
+  // Curto, humano, sem bronca, sem responder o tema fora do escopo
   return (
-    `Boa 😄 Aqui eu sou a ${BRAND} e eu foco em **atendimento inteligente no WhatsApp**.\n\n` +
-    `Se você me disser o que quer melhorar, eu te mostro uma simulação rápida:\n` +
-    `1) Triagem + encaminhar pra humano\n2) Agendamentos\n3) Pedidos/Orçamentos\n4) Relatórios\n\n` +
-    `Qual desses é o seu caso?`
+    "Haha 😄 eu até curto conversar sobre isso…\n" +
+    "mas aqui eu fico no universo de *atendimento* e *rotina com clientes*.\n\n" +
+    "Me conta: hoje o seu atendimento tá mais *tranquilo* ou mais *correria*?"
   );
 }
 
-/**
- * GERA ABORDAGEM INICIAL (fora da caixa, humana e rápida)
- */
-function firstContactHook() {
-  const variants = [
-    `👋 Cheguei antes das mensagens virarem “99+” 😄\nEu sou a ${BRAND}. Aqui o atendimento é rápido de propósito.\n\nMe diz: hoje o seu WhatsApp precisa de **triagem**, **agendamentos** ou **pedidos/orçamentos**?`,
-    `Oi! Eu sou a ${BRAND} — ${PHRASE}.\nSe sua empresa respondesse na velocidade que eu respondo… você perderia menos clientes 😉\n\nQual é o maior gargalo hoje: **demora**, **bagunça** ou **falta de padrão**?`,
-    `Ei! Bem-vindo(a) 😄\nSabe aquele cliente que some porque ninguém respondeu a tempo? Eu existo pra isso não acontecer.\n\nQuer ver uma simulação de atendimento (30s) ou prefere entender os módulos primeiro?`
-  ];
-  return variants[Math.floor(Math.random() * variants.length)];
+// ===== Abertura (não comercial, conexão humana) =====
+function melOpening() {
+  return (
+    "Oi 😊\n\n" +
+    "Mel aqui.\n" +
+    "Prometo que a conversa vai ser leve — sem script engessado.\n\n" +
+    "Como você tá hoje?"
+  );
 }
 
+// ===== Revelação (só se perguntarem) =====
+function melIdentityAnswer() {
+  return (
+    "Boa pergunta 😊\n\n" +
+    "Eu sou a Mel — faço parte da TRÍVIA.\n" +
+    "Eu sou uma atendente criada com tecnologia pra conversar de um jeito natural.\n\n" +
+    "Se você quiser, a gente volta pro que importa: como tá seu atendimento por aí?"
+  );
+}
+
+// ===== WhatsApp Send =====
+async function sendWhatsAppText(to, body) {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 20000,
+    }
+  );
+}
+
+// ===== Dedup (Meta reenviando evento) =====
+const seenMsgIds = new Map(); // id -> timestamp
+const DEDUPE_TTL_MS = 15 * 60 * 1000;
+
+function isDuplicate(id) {
+  if (!id) return false;
+  const now = Date.now();
+
+  for (const [k, ts] of seenMsgIds.entries()) {
+    if (now - ts > DEDUPE_TTL_MS) seenMsgIds.delete(k);
+  }
+
+  if (seenMsgIds.has(id)) return true;
+  seenMsgIds.set(id, now);
+  return false;
+}
+
+// ===== Memória curta + anti-loop =====
+const sessions = new Map();
 /**
- * OpenAI chat
+ * session = {
+ *  greeted: boolean,
+ *  history: [{role, content}],
+ *  lastAssistant: string,
+ *  updatedAt: number
+ * }
  */
-async function generateAIReply(session, userText) {
-  // Mantém contexto curto (para custo baixo)
-  const maxTurns = 10;
-  const history = session.turns.slice(-maxTurns);
+const SESSION_TTL_MS = 45 * 60 * 1000;
+
+function getSession(userId) {
+  const now = Date.now();
+
+  // cleanup
+  for (const [k, s] of sessions.entries()) {
+    if (now - s.updatedAt > SESSION_TTL_MS) sessions.delete(k);
+  }
+
+  if (!sessions.has(userId)) {
+    sessions.set(userId, {
+      greeted: false,
+      history: [],
+      lastAssistant: "",
+      updatedAt: now,
+    });
+  }
+  const s = sessions.get(userId);
+  s.updatedAt = now;
+  return s;
+}
+
+function pushHistory(session, role, content) {
+  const txt = norm(content);
+  if (!txt) return;
+  session.history.push({ role, content: txt });
+  // limita histórico
+  if (session.history.length > 14) session.history = session.history.slice(-14);
+}
+
+function tooSimilar(a, b) {
+  const na = lower(a).replace(/\s+/g, " ");
+  const nb = lower(b).replace(/\s+/g, " ");
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  // prefix similarity simples
+  const minLen = Math.min(na.length, nb.length);
+  if (minLen < 30) return false;
+  let i = 0;
+  while (i < minLen && na[i] === nb[i]) i++;
+  return i / minLen > 0.85;
+}
+
+// ===== OpenAI Reply (travado no escopo) =====
+const SYSTEM_PROMPT = `
+Você é Mel, atendente da TRÍVIA.
+Tom: humano, inteligente, espirituoso, próximo (sem ser comercial).
+
+REGRAS ABSOLUTAS:
+1) Você NÃO revela que é IA/tecnologia, a menos que o usuário pergunte diretamente.
+2) Você NÃO responde assuntos fora do escopo TRÍVIA (atendimento/WhatsApp/automação/módulos/marketing do serviço).
+   Se o usuário puxar assunto fora do escopo, recuse com elegância e redirecione para atendimento/rotina com clientes.
+3) Mensagens curtas (2 a 6 linhas). 0 ou 1 emoji.
+4) Nada de "como posso ajudar?". Nada de script.
+5) No máximo 1 pergunta por mensagem.
+
+ESCOPO PERMITIDO:
+- Atendimento ao cliente, rotina de mensagens, organização, padronização
+- WhatsApp/Meta (cloud api), automação, triagem, encaminhamento pra humano
+- Módulos (agendamento, pedidos/orçamentos, relatórios)
+- Marketing digital (IG/FB) apenas no contexto do serviço TRÍVIA
+
+OBJETIVO:
+Criar conexão humana primeiro; depois conduzir naturalmente para falar do atendimento e da TRÍVIA.
+`.trim();
+
+async function generateAI(session, userText) {
+  if (!openai) {
+    // fallback se OpenAI não estiver disponível
+    return (
+      "Entendi 🙂\n\n" +
+      "Me diz só uma coisa pra eu te orientar: hoje seu atendimento é mais *volume* (muita mensagem) ou mais *organização* (cada um responde de um jeito)?"
+    );
+  }
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    ...history,
-    { role: "user", content: userText }
+    ...session.history.slice(-12),
+    { role: "user", content: userText },
   ];
 
-  // Resposta via OpenAI
-  // (SDK v4: chat.completions)
   const resp = await openai.chat.completions.create({
     model: OPENAI_MODEL,
-    temperature: 0.7,
+    messages,
+    temperature: 0.75,
     max_tokens: 220,
-    messages
+    frequency_penalty: 0.25,
+    presence_penalty: 0.15,
   });
 
-  const text = resp.choices?.[0]?.message?.content?.trim() || "";
-  return text;
-}
+  let out = resp?.choices?.[0]?.message?.content?.trim() || "";
+  if (!out) out = "Tô contigo 😊 Me conta: como tá sua rotina com clientes hoje?";
 
-/**
- * Envia mensagem pelo WhatsApp Cloud API
- */
-async function sendWhatsAppText(to, text) {
-  const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
-
-  const payload = {
-    messaging_product: "whatsapp",
-    to,
-    type: "text",
-    text: { body: text }
-  };
-
-  await axios.post(url, payload, {
-    headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    timeout: 15000
-  });
-}
-
-/**
- * Extrai eventos do webhook (texto, áudio etc.)
- */
-function extractIncomingMessages(body) {
-  const out = [];
-
-  try {
-    const entry = body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-
-    const messages = value?.messages || [];
-    for (const m of messages) {
-      const from = m.from;
-      const id = m.id;
-      const type = m.type;
-
-      if (type === "text") {
-        out.push({ id, from, type, text: m.text?.body || "" });
-      } else if (type === "audio") {
-        out.push({ id, from, type, audio: m.audio });
-      } else {
-        out.push({ id, from, type });
-      }
-    }
-  } catch (e) {
-    // ignore
+  // Anti-loop: se ficou repetido, varia
+  if (tooSimilar(out, session.lastAssistant)) {
+    out =
+      "Te entendi 😄\n\n" +
+      "Pra eu não ficar no genérico: hoje você se sente mais travado por *tempo* ou por *bagunça* nas mensagens?";
   }
 
   return out;
 }
 
-/**
- * Healthcheck
- */
-app.get("/", (req, res) => {
-  res.status(200).send(`${BRAND} webhook online ✅`);
-});
-
-/**
- * Webhook verify (Meta)
- */
+// ===== Webhook Verify (GET) =====
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("✅ Webhook verified");
-    return res.status(200).send(challenge);
-  }
-
+  if (mode === "subscribe" && token === VERIFY_TOKEN) return res.status(200).send(challenge);
   return res.sendStatus(403);
 });
 
-/**
- * Webhook receive
- */
-app.post("/webhook", async (req, res) => {
-  // Responde rápido pro Meta
+// ===== Health =====
+app.get("/", (_req, res) => res.status(200).send("Mel/TRÍVIA online ✅"));
+
+// ===== Webhook Receive (POST) =====
+app.post("/webhook", (req, res) => {
+  // responde rápido para a Meta
   res.sendStatus(200);
 
-  cleanupDedupe();
-
-  const incoming = extractIncomingMessages(req.body);
-  if (!incoming.length) return;
-
-  for (const evt of incoming) {
-    // DEDUPE
-    if (evt.id && recentMessageIds.has(evt.id)) continue;
-    if (evt.id) recentMessageIds.set(evt.id, now());
-
-    const userId = evt.from;
-    const session = getSession(userId);
-
+  setImmediate(async () => {
     try {
-      // Áudio (por enquanto: resposta guiada)
-      if (evt.type === "audio") {
-        await sendWhatsAppText(
-          userId,
-          `Recebi seu áudio 😄\nNo momento eu estou configurada pra responder mensagens de texto.\nSe você quiser, me manda em texto o que você precisa sobre atendimento/automação da ${BRAND}.`
-        );
-        continue;
+      const body = req.body;
+      const value = body?.entry?.[0]?.changes?.[0]?.value;
+
+      // ignora status (delivered/read)
+      if (value?.statuses) return;
+
+      const msg = value?.messages?.[0];
+      if (!msg) return;
+
+      const from = msg.from;
+      const msgId = msg.id;
+
+      if (!from || !msgId) return;
+      if (isDuplicate(msgId)) return;
+
+      const session = getSession(from);
+
+      // só texto por enquanto
+      if (msg.type !== "text") {
+        const reply =
+          "Recebi 🙂\n" +
+          "Por enquanto eu entendo melhor *mensagens em texto*.\n\n" +
+          "Me manda por escrito: como tá seu atendimento hoje?";
+        if (!tooSimilar(reply, session.lastAssistant)) {
+          await sendWhatsAppText(from, reply);
+          session.lastAssistant = reply;
+          pushHistory(session, "assistant", reply);
+        }
+        return;
       }
 
-      const userText = (evt.text || "").trim();
-      if (!userText) continue;
+      const userText = norm(msg.text?.body || "");
+      if (!userText) return;
 
-      console.log(`📩 (${userId}) ${userText}`);
+      // Guarda usuário no histórico
+      pushHistory(session, "user", userText);
 
-      // PRIMEIRO CONTATO (quebra de padrão)
-      if (!session.greeted) {
+      // 1) Se perguntarem “é IA?” => responde com transparência elegante
+      if (isIdentityQuestion(userText)) {
+        const reply = melIdentityAnswer();
+        await sendWhatsAppText(from, reply);
+        session.lastAssistant = reply;
+        pushHistory(session, "assistant", reply);
         session.greeted = true;
-        const hook = firstContactHook();
-        session.turns.push({ role: "user", content: userText });
-        session.turns.push({ role: "assistant", content: hook });
-        session.lastAssistant = hook;
-        await sendWhatsAppText(userId, hook);
-        continue;
+        return;
       }
 
-      // TRAVA DE ESCOPO
+      // 2) Primeiro contato: abertura humana (não comercial)
+      if (!session.greeted) {
+        const reply = melOpening();
+        await sendWhatsAppText(from, reply);
+        session.lastAssistant = reply;
+        pushHistory(session, "assistant", reply);
+        session.greeted = true;
+        return;
+      }
+
+      // 3) Hard gate de escopo ANTES da IA
       if (!isInTriviaScope(userText)) {
-        const msg = outOfScopeReply();
-        // anti-loop: não repetir igual
-        const finalMsg = (msg === session.lastAssistant)
-          ? `Show 😊 Eu fico por aqui só no tema ${BRAND}/atendimento.\nQuer ver uma simulação de triagem no WhatsApp ou falar de módulos?`
-          : msg;
-
-        session.turns.push({ role: "user", content: userText });
-        session.turns.push({ role: "assistant", content: finalMsg });
-        session.lastAssistant = finalMsg;
-
-        await sendWhatsAppText(userId, finalMsg);
-        continue;
+        const reply = outOfScopeReply();
+        await sendWhatsAppText(from, reply);
+        session.lastAssistant = reply;
+        pushHistory(session, "assistant", reply);
+        return;
       }
 
-      // GERA RESPOSTA IA
-      const ai = await generateAIReply(session, userText);
-
-      // Anti-loop: se vier vazio ou repetir, faz fallback elegante
-      let reply = ai;
-      if (!reply) {
-        reply =
-          `Entendi 😊\nMe diz só uma coisa: você quer **triagem**, **agendamentos** ou **pedidos/orçamentos** na sua operação?`;
-      } else if (reply === session.lastAssistant) {
-        reply =
-          `Boa 😄 Posso te mostrar na prática:\nVocê prefere uma simulação de **triagem** ou de **agendamento**?`;
+      // 4) Se for só cumprimento depois do greeted, responde curto e puxa conversa humana
+      if (isGreeting(userText)) {
+        const reply = "Oi 😊\n\nComo você tá hoje — de verdade?";
+        await sendWhatsAppText(from, reply);
+        session.lastAssistant = reply;
+        pushHistory(session, "assistant", reply);
+        return;
       }
 
-      session.turns.push({ role: "user", content: userText });
-      session.turns.push({ role: "assistant", content: reply });
+      // 5) IA (apenas no escopo)
+      const reply = await generateAI(session, userText);
+      await sendWhatsAppText(from, reply);
       session.lastAssistant = reply;
-
-      await sendWhatsAppText(userId, reply);
+      pushHistory(session, "assistant", reply);
     } catch (err) {
-      // Log útil
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-
-      console.error("❌ Error handling message:", status || "", data || err.message);
-
-      // Se for erro de quota OpenAI
-      if (String(err?.message || "").includes("429")) {
-        try {
-          await sendWhatsAppText(
-            userId,
-            `Eu tive um limite de uso agora (quota) 😅\nSe isso acontecer, é só ajustar o billing da OpenAI e eu volto ao normal.`
-          );
-        } catch (_) {}
-      }
+      console.error("❌ Webhook error:", err?.response?.data || err?.message || err);
+      // Não responder nada aqui (já respondemos 200 no início)
     }
-  }
+  });
 });
 
-/**
- * Start
- */
+// ===== Start =====
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ ${BRAND} rodando na porta ${PORT}`);
-});
+app.listen(PORT, "0.0.0.0", () => console.log("🚀 Server rodando na porta", PORT));

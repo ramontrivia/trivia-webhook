@@ -1,366 +1,378 @@
-/**
- * TRÍVIA - WhatsApp + OpenAI (server.js único)
- * Stack: Node + Express + Axios + OpenAI SDK
- *
- * ENV obrigatórias no Railway:
- * - VERIFY_TOKEN           (ex: trivia123)
- * - WHATSAPP_TOKEN         (token Meta/WhatsApp Cloud)
- * - PHONE_NUMBER_ID        (id do phone number do WhatsApp)
- * - OPENAI_API_KEY         (chave OpenAI)
- *
- * ENV opcionais:
- * - PORT                   (Railway já define)
- * - OPENAI_MODEL           (padrão: gpt-4o-mini)
- * - ADMIN_PHONE_E164       (ex: 55DDDNUMERO, p/ alertas futuros)
- * - BUSINESS_NAME          (padrão: TRÍVIA)
- * - BRAND_PHRASE           (padrão: "tecnologia que responde")
- */
+"use strict";
 
 const express = require("express");
 const axios = require("axios");
 const OpenAI = require("openai");
 
 const app = express();
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({ limit: "10mb" }));
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
+/**
+ * ENV
+ */
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-const PORT = process.env.PORT || 3000;
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const BRAND = process.env.TRIVIA_BRAND || "TRÍVIA";
+const PHRASE = process.env.TRIVIA_PHRASE || "tecnologia que responde";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const BUSINESS_NAME = process.env.BUSINESS_NAME || "TRÍVIA";
-const BRAND_PHRASE = process.env.BRAND_PHRASE || "tecnologia que responde";
+if (!VERIFY_TOKEN) console.warn("⚠️ Missing env VERIFY_TOKEN");
+if (!WHATSAPP_TOKEN) console.warn("⚠️ Missing env WHATSAPP_TOKEN");
+if (!PHONE_NUMBER_ID) console.warn("⚠️ Missing env PHONE_NUMBER_ID");
+if (!OPENAI_API_KEY) console.warn("⚠️ Missing env OPENAI_API_KEY");
 
-// -----------------------------
-// 1) System Prompt (identidade + regras anti-robô)
-// -----------------------------
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+/**
+ * SYSTEM PROMPT (TRAVA + PERSONALIDADE)
+ */
 const SYSTEM_PROMPT = `
-Você é a ${BUSINESS_NAME}. Frase institucional: "${BRAND_PHRASE}".
+Você é a ${BRAND} — "${PHRASE}".
 
 OBJETIVO
-Criar uma experiência de primeiro contato no WhatsApp que seja:
-- humana, elegante, descontraída (meio termo)
-- surpreendente e “fora da caixa”
-- muito fluida (nada de interrogatório)
-- que mostre, na prática, como o atendimento rápido funciona
-- com leve humor e poucos emojis (no máximo 1 por mensagem, e nem sempre)
+Criar uma experiência MUITO humana, rápida e surpreendente no WhatsApp,
+mas sempre com foco comercial: mostrar como a ${BRAND} resolve atendimento.
 
-PERSONALIDADE / TOM
-- fala natural, como gente de verdade, com educação e presença
-- nada de robô, nada de “papum/papum”
-- sem agressividade, sem grosseria, sem perguntas invasivas
-- carismática, simpática, esperta, mas profissional
+ESCOPO PERMITIDO (VOCÊ SÓ PODE FALAR DISSO)
+- ${BRAND}: o que é, como funciona, benefícios, diferenciais, implantação, segurança, privacidade e limites.
+- Atendimento no WhatsApp: triagem, organização, direcionamento para humano, captura de dados, automações.
+- Módulos: agendamento, pedidos, orçamentos, relatórios, encaminhamento para equipe humana, integrações (CRM/planilha/DB/API).
+- Métricas: volume de mensagens, tempo de resposta, filas, tags, relatórios.
+- Marketing digital (se fizer parte do pacote): gestão de Instagram/Facebook e captação/organização de leads.
 
-REGRAS IMPORTANTES
-1) Não diga que é IA no primeiro contato. Só revele se o usuário perguntar diretamente.
-2) Nunca repita a mesma pergunta em sequência.
-3) Se o usuário disser "não tenho esse problema" / "tá tudo ok" / "só vim ver":
-   - reconheça com classe,
-   - mude a abordagem para “experiência rápida” (demo) sem insistir na dor.
-4) Evite coletar muitos dados. Se precisar, peça só 1 coisa por vez e com contexto.
-5) Não invente dados do usuário. Se algo não foi dito, trate como desconhecido.
-6) Se o usuário fizer perguntas sobre planos/serviços:
-   - explique claramente que a ${BUSINESS_NAME} automatiza triagem, direciona para humano quando necessário,
-     e pode habilitar módulos (agendamento, pedidos, orçamentos, relatórios).
-7) Se o usuário pedir atendimento humano:
-   - responda com respeito e ofereça encaminhar (sem prometer algo que você não pode executar agora).
-8) Sempre priorize uma conversa fluida: uma resposta curta + 1 pergunta boa OU uma proposta de mini-simulação.
-9) Se o usuário mandar palavrão, mantenha postura, não devolva palavrão. Redirecione com elegância.
+ESCOPO PROIBIDO
+- Vida pessoal, espiritualidade, saúde, casamento, política, receitas, notícias e qualquer assunto fora do escopo acima.
+- Você NÃO é assistente geral e NÃO é banco de dados de consulta.
 
-ESTRUTURA DO PRIMEIRO CONTATO (GUIA, NÃO SCRIPT)
-- Abertura: uma frase criativa que mostra “resposta rápida” e dá boas-vindas.
-- Segunda: oferecer 2 caminhos (em uma frase):
-   (a) “quer ver uma simulação de 30 segundos?” ou
-   (b) “quer só entender como funciona?”
-- Se escolher simulação: peça algo simples (ex: “qual é o nome da sua empresa?”) e simule triagem de forma leve.
-- Fechamento: convite para conversar sobre módulos/implantação, sem pressão.
+QUANDO FOR FORA DO ESCOPO
+- Seja simpática e curta.
+- Não responda o assunto.
+- Redirecione para TRÍVIA com UMA pergunta objetiva.
+
+PERSONALIDADE
+- humana, natural, elegante
+- humor leve e inteligente (0 a 1 emoji por mensagem)
+- sem robô, sem questionário, sem repetir frases
+- no máximo 1 pergunta por vez quando fizer sentido
+
+ANTI-LOOP
+- Nunca repita o mesmo parágrafo/pergunta em sequência.
+- Se o usuário disser "tá tudo ok / vim só testar", aceite e faça uma demonstração curta e divertida (sem insistir em dor).
 
 FORMATO
-- Responda sempre em PT-BR
-- Mensagens curtas (2 a 6 linhas) e bem humanas
-- 0 ou 1 emoji por mensagem
+- PT-BR
+- Mensagens curtas (2 a 6 linhas)
+- 0 a 1 emoji por mensagem
 `;
 
-// -----------------------------
-// 2) Memória curta por usuário (anti-loop + histórico + etapa)
-// -----------------------------
+/**
+ * MEMÓRIA SIMPLES POR USUÁRIO (em RAM)
+ * (para produção maior: usar Redis/DB)
+ */
 const sessions = new Map();
-// session shape:
-// {
-//   history: [{role:"user"/"assistant", content:"..."}],
-//   stage: "start" | "discover" | "demo" | "offer" | "support",
-//   lastAssistant: "texto...",
-//   updatedAt: timestamp
-// }
+/**
+ * Deduplicação por message.id (evita responder duas vezes a mesma entrega)
+ */
+const recentMessageIds = new Map(); // id -> timestamp
+const DEDUPE_TTL_MS = 10 * 60 * 1000; // 10 min
 
-const SESSION_TTL_MS = 1000 * 60 * 30; // 30 min
+function now() {
+  return Date.now();
+}
+
+function cleanupDedupe() {
+  const t = now();
+  for (const [id, ts] of recentMessageIds.entries()) {
+    if (t - ts > DEDUPE_TTL_MS) recentMessageIds.delete(id);
+  }
+}
 
 function getSession(userId) {
-  const now = Date.now();
-  let s = sessions.get(userId);
-  if (!s) {
-    s = {
-      history: [],
-      stage: "start",
+  if (!sessions.has(userId)) {
+    sessions.set(userId, {
+      createdAt: now(),
+      greeted: false,
       lastAssistant: "",
-      updatedAt: now,
-    };
-    sessions.set(userId, s);
-    return s;
+      turns: [], // {role, content}
+    });
   }
-  // expira sessão
-  if (now - s.updatedAt > SESSION_TTL_MS) {
-    s = {
-      history: [],
-      stage: "start",
-      lastAssistant: "",
-      updatedAt: now,
-    };
-    sessions.set(userId, s);
-    return s;
-  }
-  s.updatedAt = now;
-  return s;
+  return sessions.get(userId);
 }
 
-function pushHistory(session, role, content) {
-  session.history.push({ role, content });
-  // limita histórico para não explodir tokens/custo
-  if (session.history.length > 12) session.history = session.history.slice(-12);
+/**
+ * FILTRO / TRAVA DE ESCOPO
+ */
+function isInTriviaScope(text) {
+  const t = (text || "").toLowerCase();
+
+  const allowed = [
+    "trivia", "trívia", "atendimento", "whatsapp", "chat", "chatbot",
+    "automação", "automacao", "triagem", "fila", "sac", "suporte",
+    "agendamento", "agenda", "pedido", "pedidos", "orçamento", "orcamento",
+    "relatório", "relatorio", "crm", "lead", "funil", "instagram", "facebook",
+    "meta", "api", "integração", "integracao", "número", "numero",
+    "mensagem", "mensagens", "humano", "humanizado", "equipe", "encaminhar",
+    "tempo de resposta", "sla", "métrica", "metricas", "dashboard", "planos",
+    "módulo", "modulo", "implantação", "implantacao", "setup", "configurar",
+    "preço", "preco", "custo", "cobrança", "cobranca", "token", "webhook",
+    "central", "responder", "resposta", "automático", "automatico", "cliente",
+    "atender", "atendimento inteligente", "whatsapp business"
+  ];
+
+  // Exemplos comuns fora do escopo (não precisa ser perfeito — é só “puxar de volta”)
+  const blocked = [
+    "casar", "casamento", "namoro", "religião", "religiao", "espiritual",
+    "deus", "bíblia", "biblia", "política", "politica",
+    "receita", "carne", "dieta", "saúde", "saude", "doença", "doenca",
+    "remédio", "remedio", "futebol", "jogo", "notícia", "noticia",
+    "horóscopo", "horoscopo", "tarot", "investimento", "bitcoin"
+  ];
+
+  const hasAllowed = allowed.some((k) => t.includes(k));
+  const hasBlocked = blocked.some((k) => t.includes(k));
+
+  if (hasBlocked && !hasAllowed) return false;
+  if (hasAllowed) return true;
+
+  // Mensagens curtas tipo "oi", "ola", "bom dia" -> a gente permite (saudação)
+  if (t.trim().length <= 12) return true;
+
+  // Neutro -> trava (evita virar “ChatGPT geral”)
+  return false;
 }
 
-function normalizeForCompare(text) {
-  return (text || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[^\p{L}\p{N}\s]/gu, "")
-    .trim();
+function outOfScopeReply() {
+  return (
+    `Boa 😄 Aqui eu sou a ${BRAND} e eu foco em **atendimento inteligente no WhatsApp**.\n\n` +
+    `Se você me disser o que quer melhorar, eu te mostro uma simulação rápida:\n` +
+    `1) Triagem + encaminhar pra humano\n2) Agendamentos\n3) Pedidos/Orçamentos\n4) Relatórios\n\n` +
+    `Qual desses é o seu caso?`
+  );
 }
 
-function isTooSimilar(a, b) {
-  const na = normalizeForCompare(a);
-  const nb = normalizeForCompare(b);
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  // similaridade “tosca” mas eficaz pra anti-loop:
-  const minLen = Math.min(na.length, nb.length);
-  if (minLen < 25) return false;
-  const commonPrefix = (() => {
-    let i = 0;
-    while (i < minLen && na[i] === nb[i]) i++;
-    return i;
-  })();
-  return commonPrefix / minLen > 0.8;
+/**
+ * GERA ABORDAGEM INICIAL (fora da caixa, humana e rápida)
+ */
+function firstContactHook() {
+  const variants = [
+    `👋 Cheguei antes das mensagens virarem “99+” 😄\nEu sou a ${BRAND}. Aqui o atendimento é rápido de propósito.\n\nMe diz: hoje o seu WhatsApp precisa de **triagem**, **agendamentos** ou **pedidos/orçamentos**?`,
+    `Oi! Eu sou a ${BRAND} — ${PHRASE}.\nSe sua empresa respondesse na velocidade que eu respondo… você perderia menos clientes 😉\n\nQual é o maior gargalo hoje: **demora**, **bagunça** ou **falta de padrão**?`,
+    `Ei! Bem-vindo(a) 😄\nSabe aquele cliente que some porque ninguém respondeu a tempo? Eu existo pra isso não acontecer.\n\nQuer ver uma simulação de atendimento (30s) ou prefere entender os módulos primeiro?`
+  ];
+  return variants[Math.floor(Math.random() * variants.length)];
 }
 
-// -----------------------------
-// 3) WhatsApp helpers
-// -----------------------------
+/**
+ * OpenAI chat
+ */
+async function generateAIReply(session, userText) {
+  // Mantém contexto curto (para custo baixo)
+  const maxTurns = 10;
+  const history = session.turns.slice(-maxTurns);
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...history,
+    { role: "user", content: userText }
+  ];
+
+  // Resposta via OpenAI
+  // (SDK v4: chat.completions)
+  const resp = await openai.chat.completions.create({
+    model: OPENAI_MODEL,
+    temperature: 0.7,
+    max_tokens: 220,
+    messages
+  });
+
+  const text = resp.choices?.[0]?.message?.content?.trim() || "";
+  return text;
+}
+
+/**
+ * Envia mensagem pelo WhatsApp Cloud API
+ */
 async function sendWhatsAppText(to, text) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+
   const payload = {
     messaging_product: "whatsapp",
     to,
     type: "text",
-    text: { body: text },
+    text: { body: text }
   };
 
   await axios.post(url, payload, {
     headers: {
       Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json",
+      "Content-Type": "application/json"
     },
-    timeout: 15000,
+    timeout: 15000
   });
 }
 
-function extractIncomingText(body) {
-  // padrão WhatsApp Cloud: entry -> changes -> value -> messages
+/**
+ * Extrai eventos do webhook (texto, áudio etc.)
+ */
+function extractIncomingMessages(body) {
+  const out = [];
+
   try {
     const entry = body.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
-    const msg = value?.messages?.[0];
-    const from = msg?.from;
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
 
-    if (!msg || !from) return null;
+    const messages = value?.messages || [];
+    for (const m of messages) {
+      const from = m.from;
+      const id = m.id;
+      const type = m.type;
 
-    // texto
-    if (msg.type === "text") {
-      const text = msg.text?.body || "";
-      return { from, text, type: "text" };
+      if (type === "text") {
+        out.push({ id, from, type, text: m.text?.body || "" });
+      } else if (type === "audio") {
+        out.push({ id, from, type, audio: m.audio });
+      } else {
+        out.push({ id, from, type });
+      }
     }
-
-    // outros tipos (por enquanto, tratamos como “não suportado”)
-    return { from, text: "", type: msg.type || "unknown" };
-  } catch {
-    return null;
+  } catch (e) {
+    // ignore
   }
+
+  return out;
 }
 
-// -----------------------------
-// 4) Motor de resposta (OpenAI) + anti-loop
-// -----------------------------
-async function generateReply(session, userText) {
-  // “volante” da etapa, mas sem engessar
-  const stageHint = `Estado atual da conversa (stage): ${session.stage}.
-Regra: seja fluida, humana, evite questionário. Se precisar, faça 1 pergunta inteligente por vez.`;
+/**
+ * Healthcheck
+ */
+app.get("/", (req, res) => {
+  res.status(200).send(`${BRAND} webhook online ✅`);
+});
 
-  const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: stageHint },
-    ...session.history,
-    { role: "user", content: userText },
-  ];
-
-  const resp = await openai.chat.completions.create({
-    model: MODEL,
-    messages,
-    temperature: 0.8,
-    presence_penalty: 0.2,
-    frequency_penalty: 0.3,
-  });
-
-  let answer = resp.choices?.[0]?.message?.content?.trim() || "";
-
-  // Anti-loop: se vier igual ou muito parecido com a última resposta, força variação
-  if (isTooSimilar(answer, session.lastAssistant)) {
-    const retryMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "system",
-        content:
-          "Atenção: sua última resposta ficou repetitiva. Gere uma resposta diferente, mais curta, com outra abordagem, sem repetir perguntas.",
-      },
-      ...session.history,
-      { role: "user", content: userText },
-    ];
-
-    const retry = await openai.chat.completions.create({
-      model: MODEL,
-      messages: retryMessages,
-      temperature: 0.95,
-      presence_penalty: 0.35,
-      frequency_penalty: 0.45,
-    });
-
-    answer = retry.choices?.[0]?.message?.content?.trim() || answer;
-  }
-
-  // Se o modelo vier vazio, fallback humano
-  if (!answer) {
-    answer =
-      "Oi! Eu tô por aqui 😊 Me diz: você quer só entender como a TRÍVIA funciona, ou prefere ver uma mini-simulação rapidinha?";
-  }
-
-  // Atualiza stage com heurística leve (sem travar)
-  const lower = userText.toLowerCase();
-  if (session.stage === "start") session.stage = "discover";
-  if (lower.includes("simulação") || lower.includes("simulacao")) session.stage = "demo";
-  if (lower.includes("preço") || lower.includes("valor") || lower.includes("planos"))
-    session.stage = "offer";
-  if (lower.includes("suporte") || lower.includes("erro")) session.stage = "support";
-
-  session.lastAssistant = answer;
-
-  return answer;
-}
-
-// -----------------------------
-// 5) Webhook verify (GET)
-// -----------------------------
+/**
+ * Webhook verify (Meta)
+ */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("✅ Webhook verificado com sucesso");
+    console.log("✅ Webhook verified");
     return res.status(200).send(challenge);
   }
+
   return res.sendStatus(403);
 });
 
-// -----------------------------
-// 6) Webhook messages (POST)
-// -----------------------------
+/**
+ * Webhook receive
+ */
 app.post("/webhook", async (req, res) => {
-  // responder rápido pro WhatsApp
+  // Responde rápido pro Meta
   res.sendStatus(200);
 
-  const incoming = extractIncomingText(req.body);
-  if (!incoming) return;
+  cleanupDedupe();
 
-  const { from, text, type } = incoming;
-  const session = getSession(from);
+  const incoming = extractIncomingMessages(req.body);
+  if (!incoming.length) return;
 
-  try {
-    // Se não for texto (áudio, imagem etc.), responda com elegância
-    if (type !== "text") {
-      const msg =
-        "Cheguei 😊 Por enquanto eu entendo melhor mensagens em texto. Se você me mandar por escrito (bem curtinho mesmo), eu te respondo rapidinho.";
-      await sendWhatsAppText(from, msg);
-      pushHistory(session, "assistant", msg);
-      return;
-    }
+  for (const evt of incoming) {
+    // DEDUPE
+    if (evt.id && recentMessageIds.has(evt.id)) continue;
+    if (evt.id) recentMessageIds.set(evt.id, now());
 
-    const userText = (text || "").trim();
-
-    if (!userText) {
-      const msg = "Eu vi sua mensagem aqui 🙂 Me manda em texto só mais uma vez?";
-      await sendWhatsAppText(from, msg);
-      pushHistory(session, "assistant", msg);
-      return;
-    }
-
-    pushHistory(session, "user", userText);
-
-    const reply = await generateReply(session, userText);
-
-    await sendWhatsAppText(from, reply);
-    pushHistory(session, "assistant", reply);
-
-    console.log("✅ Mensagem processada:", from, userText);
-  } catch (err) {
-    // Tratamento especial para quota/429
-    const status = err?.response?.status;
-    const apiMsg =
-      err?.response?.data?.error?.message ||
-      err?.message ||
-      "Erro desconhecido";
-
-    console.error("❌ Erro no webhook:", status, apiMsg);
-
-    let fallback =
-      "Poxa — tive um soluço técnico aqui 😅 Pode me mandar sua última mensagem de novo em alguns instantes?";
-
-    // quota / billing / 429
-    if (String(apiMsg).includes("429") || String(apiMsg).toLowerCase().includes("quota")) {
-      fallback =
-        "Agora eu tô temporariamente sem fôlego pra pensar (limite do plano/uso). 😅\n" +
-        "Se você quiser, eu posso te explicar como ajustar isso rapidinho: é só habilitar faturamento/créditos na OpenAI e eu volto 100%.";
-    }
+    const userId = evt.from;
+    const session = getSession(userId);
 
     try {
-      await sendWhatsAppText(from, fallback);
-      pushHistory(session, "assistant", fallback);
-    } catch (sendErr) {
-      console.error("❌ Falha ao enviar fallback:", sendErr?.message || sendErr);
+      // Áudio (por enquanto: resposta guiada)
+      if (evt.type === "audio") {
+        await sendWhatsAppText(
+          userId,
+          `Recebi seu áudio 😄\nNo momento eu estou configurada pra responder mensagens de texto.\nSe você quiser, me manda em texto o que você precisa sobre atendimento/automação da ${BRAND}.`
+        );
+        continue;
+      }
+
+      const userText = (evt.text || "").trim();
+      if (!userText) continue;
+
+      console.log(`📩 (${userId}) ${userText}`);
+
+      // PRIMEIRO CONTATO (quebra de padrão)
+      if (!session.greeted) {
+        session.greeted = true;
+        const hook = firstContactHook();
+        session.turns.push({ role: "user", content: userText });
+        session.turns.push({ role: "assistant", content: hook });
+        session.lastAssistant = hook;
+        await sendWhatsAppText(userId, hook);
+        continue;
+      }
+
+      // TRAVA DE ESCOPO
+      if (!isInTriviaScope(userText)) {
+        const msg = outOfScopeReply();
+        // anti-loop: não repetir igual
+        const finalMsg = (msg === session.lastAssistant)
+          ? `Show 😊 Eu fico por aqui só no tema ${BRAND}/atendimento.\nQuer ver uma simulação de triagem no WhatsApp ou falar de módulos?`
+          : msg;
+
+        session.turns.push({ role: "user", content: userText });
+        session.turns.push({ role: "assistant", content: finalMsg });
+        session.lastAssistant = finalMsg;
+
+        await sendWhatsAppText(userId, finalMsg);
+        continue;
+      }
+
+      // GERA RESPOSTA IA
+      const ai = await generateAIReply(session, userText);
+
+      // Anti-loop: se vier vazio ou repetir, faz fallback elegante
+      let reply = ai;
+      if (!reply) {
+        reply =
+          `Entendi 😊\nMe diz só uma coisa: você quer **triagem**, **agendamentos** ou **pedidos/orçamentos** na sua operação?`;
+      } else if (reply === session.lastAssistant) {
+        reply =
+          `Boa 😄 Posso te mostrar na prática:\nVocê prefere uma simulação de **triagem** ou de **agendamento**?`;
+      }
+
+      session.turns.push({ role: "user", content: userText });
+      session.turns.push({ role: "assistant", content: reply });
+      session.lastAssistant = reply;
+
+      await sendWhatsAppText(userId, reply);
+    } catch (err) {
+      // Log útil
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+
+      console.error("❌ Error handling message:", status || "", data || err.message);
+
+      // Se for erro de quota OpenAI
+      if (String(err?.message || "").includes("429")) {
+        try {
+          await sendWhatsAppText(
+            userId,
+            `Eu tive um limite de uso agora (quota) 😅\nSe isso acontecer, é só ajustar o billing da OpenAI e eu volto ao normal.`
+          );
+        } catch (_) {}
+      }
     }
   }
 });
 
-// -----------------------------
-// 7) Healthcheck
-// -----------------------------
-app.get("/", (_, res) => {
-  res.status(200).send(`${BUSINESS_NAME} online ✅`);
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+/**
+ * Start
+ */
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ ${BRAND} rodando na porta ${PORT}`);
 });

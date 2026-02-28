@@ -1,0 +1,215 @@
+==================================================
+TRÍVIA — BASE TÉCNICA OFICIAL
+==================================================
+
+[CATEGORIA DO SISTEMA]
+
+Tipo: Sistema de atendimento inteligente via WhatsApp
+Arquitetura: Webhook + Processamento de IA + Integração API Oficial Meta
+Canal principal: WhatsApp Business API (Cloud API)
+Modelo: SaaS modular escalável
+
+==================================================
+
+[ARQUITETURA GERAL]
+
+A TRÍVIA opera em 4 camadas principais:
+
+1) Camada de Entrada (Webhook)
+- Recebe mensagens do WhatsApp via API oficial da Meta.
+- Captura texto, áudio, mídia e metadados.
+- Identifica número do cliente.
+- Registra timestamp da interação.
+
+2) Camada de Processamento
+- Interpreta intenção da mensagem.
+- Classifica tipo de solicitação.
+- Consulta base de conhecimento (knowledge/*.txt).
+- Aplica persona e regras comportamentais.
+- Decide próximo passo do fluxo.
+
+3) Camada de Inteligência
+- Processamento via modelo de linguagem.
+- Resposta humanizada.
+- Aplicação de contexto.
+- Aplicação de regras de segurança.
+- Validação de escopo temático.
+
+4) Camada de Saída
+- Envio de resposta via Graph API.
+- Registro interno.
+- Acionamento de lead quando aplicável.
+
+==================================================
+
+[MODELO OPERACIONAL]
+
+A TRÍVIA trabalha com:
+
+- Atendimento orientado a intenção.
+- Coleta estruturada de dados.
+- Encaminhamento estratégico.
+- Organização conversacional.
+
+Fluxo base:
+
+Mensagem recebida
+↓
+Identificação de intenção
+↓
+Consulta base institucional + técnica
+↓
+Aplicação de persona
+↓
+Geração de resposta
+↓
+Validação de lead
+↓
+Encaminhamento (se necessário)
+
+==================================================
+
+[ESTRUTURA DE FLUXOS]
+
+Tipos de fluxo configuráveis:
+
+- Fluxo de recepção
+- Fluxo de agendamento
+- Fluxo de orçamento
+- Fluxo de pedidos
+- Fluxo de qualificação
+- Fluxo de transferência para humano
+
+Cada fluxo contém:
+
+- Perguntas estratégicas
+- Campos obrigatórios
+- Campos opcionais
+- Regras de saída
+- Critérios de lead
+
+==================================================
+
+[CAPTURA DE DADOS]
+
+Dados estruturáveis:
+
+- Nome do cliente
+- Nome da empresa
+- Cidade/UF
+- Segmento
+- Interesse
+- Dor principal
+- Urgência
+- Histórico de mensagens
+- Data/hora
+- Canal
+
+Esses dados podem ser utilizados para:
+
+- Relatórios
+- Notificação de lead
+- CRM futuro
+- Segmentação
+
+==================================================
+
+[MECANISMO DE LEAD]
+
+Critérios de geração de lead:
+
+- Intenção de contratação
+- Solicitação de valores
+- Pedido de contato comercial
+- Demonstração de urgência
+
+Quando acionado:
+
+1) Confirma dados essenciais
+2) Envia número comercial automaticamente
+3) Dispara notificação interna com resumo estruturado
+
+Formato da notificação:
+
+NOVO LEAD TRÍVIA
+Empresa:
+Cidade:
+Segmento:
+Interesse:
+Resumo:
+Telefone:
+Data/Hora:
+
+==================================================
+
+[SEGURANÇA E RESTRIÇÕES]
+
+A TRÍVIA não pode:
+
+- Inventar contatos.
+- Inventar e-mails.
+- Inventar preços.
+- Enviar dados técnicos internos.
+- Expor token, servidor ou estrutura.
+- Sair do escopo do negócio.
+
+Se cliente solicitar assunto fora do nicho:
+- Responder educadamente.
+- Redirecionar para tema atendimento/tecnologia.
+
+==================================================
+
+[ESCALABILIDADE]
+
+Modelo preparado para:
+
+- Múltiplos clientes.
+- Múltiplos números.
+- Segmentação por negócio.
+- Configuração personalizada por empresa.
+- Modularização de recursos.
+
+Cada cliente pode ter:
+
+- Fluxo exclusivo.
+- Persona ajustada.
+- Serviços ativados conforme plano.
+
+==================================================
+
+[INTEGRAÇÕES FUTURAS POSSÍVEIS]
+
+- CRM
+- Google Agenda
+- Sistemas internos
+- ERP
+- Plataformas de pagamento
+- Dashboard analítico
+
+==================================================
+
+[MODELO DE RESPOSTA INTELIGENTE]
+
+A TRÍVIA utiliza:
+
+- Linguagem natural.
+- Contexto acumulado.
+- Base institucional.
+- Base técnica.
+- Persona definida.
+- Regras de fluxo.
+- Regras de conversão.
+
+==================================================
+
+[OBJETIVO TÉCNICO PRINCIPAL]
+
+Organizar.
+Padronizar.
+Escalar.
+Converter.
+Sem perder humanização.
+
+==================================================
+FIM DO DOCUMENTO
+==================================================

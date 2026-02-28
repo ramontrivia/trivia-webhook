@@ -1,0 +1,136 @@
+============================================================
+TRÍVIA — LÓGICA DE NOTIFICAÇÃO DE LEADS
+Arquitetura de Disparo Inteligente
+============================================================
+
+[OBJETIVO]
+
+Definir exatamente quando um lead deve ser notificado
+e quais dados devem ser enviados ao telefone comercial.
+
+Sem ambiguidade.
+Sem interpretação subjetiva.
+Sem improviso.
+
+============================================================
+1️⃣ DEFINIÇÃO DE LEAD QUALIFICADO
+============================================================
+
+Um lead deve ser considerado QUALIFICADO quando ocorrer
+qualquer uma das situações abaixo:
+
+✔ Cliente disser explicitamente:
+- “Quero contratar.”
+- “Quero valores.”
+- “Me passa o contato.”
+- “Como faço para fechar?”
+- “Quero falar com comercial.”
+
+✔ Cliente fornecer:
+- Nome da empresa
+- Cidade
+- Tipo de negócio
+
+✔ Cliente demonstrar intenção clara de implementação.
+
+============================================================
+2️⃣ MOMENTO DO DISPARO
+============================================================
+
+A notificação deve ser enviada:
+
+APÓS:
+• Confirmação do nome da empresa
+• Confirmação da cidade
+• Identificação do interesse
+
+Nunca enviar notificação:
+• Antes de qualificar.
+• Antes de identificar intenção real.
+
+============================================================
+3️⃣ DADOS OBRIGATÓRIOS NA NOTIFICAÇÃO
+============================================================
+
+Toda notificação deve conter:
+
+• Nome do cliente (se disponível)
+• Número do WhatsApp do cliente
+• Nome da empresa
+• Cidade / Estado
+• Segmento
+• Interesse demonstrado
+• Resumo da dor identificada
+
+============================================================
+4️⃣ FORMATO DA MENSAGEM INTERNA
+============================================================
+
+Modelo padrão:
+
+🚨 NOVO LEAD QUALIFICADO — TRÍVIA
+
+👤 Cliente: [Nome]
+📱 WhatsApp: [Número]
+🏢 Empresa: [Nome da empresa]
+📍 Cidade: [Cidade / Estado]
+🧩 Segmento: [Segmento]
+🔥 Interesse: [Resumo da intenção]
+⚠ Dor principal: [Resumo da dor identificada]
+
+Ação recomendada:
+Contato prioritário.
+
+============================================================
+5️⃣ PRIORIDADE DE LEAD
+============================================================
+
+Classificação automática:
+
+🔥 QUENTE
+Disse claramente que quer contratar.
+
+🟡 MORNO
+Pediu valores ou funcionamento.
+
+🔵 FRIO
+Está pesquisando mas demonstrou interesse.
+
+============================================================
+6️⃣ REGRAS CRÍTICAS
+============================================================
+
+• Nunca enviar lead duplicado.
+• Nunca enviar notificação sem qualificação.
+• Nunca enviar notificação vazia.
+• Nunca travar conversa após disparo.
+• MEL deve continuar conversando após notificação.
+
+============================================================
+7️⃣ COMPORTAMENTO APÓS DISPARO
+============================================================
+
+Após enviar notificação:
+
+MEL deve:
+
+1. Enviar contato comercial ao cliente.
+2. Informar que equipe foi avisada.
+3. Manter postura segura e organizada.
+
+Nunca:
+• Dizer “aguarde”.
+• Encerrar conversa abruptamente.
+• Ficar em silêncio.
+
+============================================================
+8️⃣ REGRA FINAL
+============================================================
+
+Lead é consequência da intenção.
+Intenção precisa ser confirmada.
+Confirmação ativa disparo.
+
+============================================================
+FIM DO DOCUMENTO
+============================================================

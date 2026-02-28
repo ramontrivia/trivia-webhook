@@ -1,4 +1,4 @@
-// server.js (ESM) — funciona com package.json: { "type": "module" }
+// server.js (ESM) — compatível com package.json: { "type": "module" }
 
 import express from "express";
 import axios from "axios";
@@ -7,204 +7,239 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json());
 
-/**
- * ENV obrigatórias (Railway Variables):
- * - PORT (Railway define)
- * - VERIFY_TOKEN
- * - WHATSAPP_TOKEN
- * - PHONE_NUMBER_ID
- * - GRAPH_VERSION  -> use "v21.0" (v minúsculo!)
- * - COMMERCIAL_PHONE (ex: 5531997373954)
- * - (opcional) KNOWLEDGE_PATH (default: knowledge/trivia_base.txt)
- */
-
+// =========================
+// ENV
+// =========================
 const PORT = process.env.PORT || 8080;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "";
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID || "";
-const GRAPH_VERSION_RAW = process.env.GRAPH_VERSION || "v21.0";
-const COMMERCIAL_PHONE = process.env.COMMERCIAL_PHONE || "";
 
-// Normaliza GRAPH_VERSION (garante "v" minúsculo)
-const GRAPH_VERSION = (() => {
-  const v = String(GRAPH_VERSION_RAW).trim();
-  if (!v) return "v21.0";
-  // se vier "V21.0", vira "v21.0"
-  if (v[0] === "V") return "v" + v.slice(1);
-  return v;
-})();
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0";
 
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+// Comercial (seu WhatsApp que recebe notificação)
+const COMMERCIAL_PHONE = (process.env.COMMERCIAL_PHONE || "").replace(/\D/g, ""); // ex: 5531997373954
 
+// OpenAI (já existe no seu projeto)
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+// =========================
+// KNOWLEDGE BASE (opcional)
+// =========================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const KNOWLEDGE_PATH =
-  process.env.KNOWLEDGE_PATH ||
-  path.join(__dirname, "knowledge", "trivia_base.txt");
-
-// Base carregada (texto longo)
-let KNOWLEDGE_TEXT = "";
-
-// Sessões simples em memória (não perde em deploy? perde, mas ok pra MVP)
-const sessions = new Map(); // wa_id -> { stage, company, city, lastIntent }
-
-/** =======================
- * Helpers
- * ======================= */
-
-function logEnvSafe() {
-  const mask = (s) => (s ? `${String(s).slice(0, 6)}...${String(s).slice(-4)}` : "");
-  console.log("PORT:", PORT);
-  console.log("GRAPH_VERSION:", GRAPH_VERSION);
-  console.log("PHONE_NUMBER_ID:", PHONE_NUMBER_ID ? mask(PHONE_NUMBER_ID) : "(vazio)");
-  console.log("WHATSAPP_TOKEN:", WHATSAPP_TOKEN ? mask(WHATSAPP_TOKEN) : "(vazio)");
-  console.log("VERIFY_TOKEN:", VERIFY_TOKEN ? "(ok)" : "(vazio)");
-  console.log("COMMERCIAL_PHONE:", COMMERCIAL_PHONE || "(vazio)");
+const KB_PATH = path.join(__dirname, "knowledge", "trivia_base.txt");
+let KNOWLEDGE_BASE = "";
+try {
+  KNOWLEDGE_BASE = fs.readFileSync(KB_PATH, "utf-8");
+  console.log(`✅ Base carregada (${path.relative(__dirname, KB_PATH)})`);
+} catch (e) {
+  console.log("⚠️ Base não encontrada (knowledge/trivia_base.txt). Seguindo sem KB.");
 }
 
-function normalizeText(t) {
-  return String(t || "").trim();
+// =========================
+// SESSION STORE (memória simples)
+// =========================
+/**
+ * sessions.get(userWaId) = {
+ *   startedAt: ISO,
+ *   lastAt: ISO,
+ *   messages: [{ role: "user"|"assistant", text, ts }],
+ *   lead: { name, city, state, business },
+ *   flags: { sentCommercialContact: bool, sentCommercialReport: bool }
+ * }
+ */
+const sessions = new Map();
+
+function getSession(userWaId) {
+  if (!sessions.has(userWaId)) {
+    sessions.set(userWaId, {
+      startedAt: new Date().toISOString(),
+      lastAt: new Date().toISOString(),
+      messages: [],
+      lead: { name: "", city: "", state: "", business: "" },
+      flags: { sentCommercialContact: false, sentCommercialReport: false },
+    });
+  }
+  const s = sessions.get(userWaId);
+  s.lastAt = new Date().toISOString();
+  return s;
 }
 
-function isHireIntent(text) {
-  const t = normalizeText(text).toLowerCase();
+// limpeza simples (não deixar crescer infinito)
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, s] of sessions.entries()) {
+    const ageMin = (now - new Date(s.lastAt).getTime()) / 60000;
+    if (ageMin > 180) sessions.delete(k); // 3h sem falar -> remove
+  }
+}, 10 * 60 * 1000);
+
+// =========================
+// HELPERS
+// =========================
+function normalize(text = "") {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+}
+
+function looksLikeHireIntent(text) {
+  const t = normalize(text);
   return (
     t.includes("contratar") ||
     t.includes("quero contratar") ||
-    t.includes("fechar") ||
-    t.includes("assinar") ||
-    t.includes("plano") ||
-    t.includes("orçamento") ||
-    t.includes("orcamento") ||
-    t.includes("comercial")
-  );
-}
-
-function isJustCommercialContact(text) {
-  const t = normalizeText(text).toLowerCase();
-  // Cliente pedindo só o telefone/contato
-  return (
+    t.includes("como faco pra contratar") ||
+    t.includes("como faço pra contratar") ||
     t.includes("telefone do comercial") ||
-    t.includes("quero telefone do comercial") ||
-    t.includes("me passa o telefone") ||
-    t.includes("me passa o contato") ||
     t.includes("contato do comercial") ||
-    t === "telefone" ||
-    t === "contato"
+    t.includes("falar com o comercial") ||
+    t.includes("passa o numero") ||
+    t.includes("passa o telefone") ||
+    t.includes("quero apenas contratar")
   );
 }
 
-function extractCompanyAndCity(text) {
-  // Extrator simples (não perfeito) – pega algo tipo:
-  // "Salão Chanel. De Mateus Leme minas gerais"
-  const raw = normalizeText(text);
+function extractSimpleLeadData(session, userText) {
+  // heurística leve: se o user manda "Salão X. de Cidade UF"
+  // não é perfeito — por isso depois a gente pede pro OpenAI extrair melhor (se disponível)
+  const txt = userText || "";
+  // tenta pegar UF
+  const uf = txt.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i);
+  if (uf) session.lead.state = uf[1].toUpperCase();
 
-  // tentativa de achar "de <cidade>" ou "<cidade> - <uf>"
-  const cityMatch =
-    raw.match(/\bde\s+([A-Za-zÀ-ÿ\s]{3,})(?:\s*-\s*([A-Za-z]{2}))?\b/i) ||
-    raw.match(/\b([A-Za-zÀ-ÿ\s]{3,})\s*-\s*([A-Za-z]{2})\b/i);
+  // tenta pegar "salao", "barbearia", "clinica" etc como "business"
+  const bizHint = txt.match(/(salao|salão|barbearia|clinica|clínica|loja|restaurante|escritorio|escritório|empresa)\s+([^\n,.]+)/i);
+  if (bizHint && !session.lead.business) {
+    session.lead.business = (bizHint[0] || "").trim();
+  }
 
-  const city = cityMatch ? normalizeText(cityMatch[1] + (cityMatch[2] ? `-${cityMatch[2]}` : "")) : "";
-
-  // empresa: pega antes de "de ..." se existir; senão a primeira frase
-  let company = "";
-  const parts = raw.split(".");
-  if (parts.length >= 1) company = normalizeText(parts[0]);
-  if (company.toLowerCase().startsWith("de ")) company = company.slice(3).trim();
-
-  // Se a “empresa” ficou igual à cidade, limpa
-  if (city && company && company.toLowerCase() === city.toLowerCase()) company = "";
-
-  return { company, city };
-}
-
-async function loadKnowledge() {
-  try {
-    if (fs.existsSync(KNOWLEDGE_PATH)) {
-      KNOWLEDGE_TEXT = fs.readFileSync(KNOWLEDGE_PATH, "utf-8");
-      console.log(`✅ Base carregada (${path.relative(__dirname, KNOWLEDGE_PATH)})`);
-    } else {
-      KNOWLEDGE_TEXT = "";
-      console.log(`⚠️ Base NÃO encontrada em ${KNOWLEDGE_PATH} (ok, sigo sem base)`);
-    }
-  } catch (err) {
-    KNOWLEDGE_TEXT = "";
-    console.log("⚠️ Falha ao carregar base:", err?.message || err);
+  // tenta pegar cidade (bem simples)
+  const cityHint = txt.match(/de\s+([A-Za-zÀ-ÿ\s]{3,})\s*(?:-|,)?\s*(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)?/i);
+  if (cityHint && !session.lead.city) {
+    session.lead.city = (cityHint[1] || "").trim();
+    if (cityHint[2]) session.lead.state = cityHint[2].toUpperCase();
   }
 }
 
-async function sendWhatsAppText(to, body) {
-  const url = `${GRAPH_BASE}/${PHONE_NUMBER_ID}/messages`;
+async function sendWhatsAppMessage(toPhoneE164Digits, text) {
+  // toPhoneE164Digits: só números, ex: 5531997373954
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    to: toPhoneE164Digits,
+    type: "text",
+    text: { body: text },
+  };
 
   try {
-    const payload = {
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body }
-    };
-
-    const res = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 15000
+    await axios.post(url, payload, {
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+      timeout: 20000,
     });
-
-    return { ok: true, data: res.data };
+    return true;
   } catch (err) {
     const status = err?.response?.status;
     const data = err?.response?.data;
-    console.log("❌ WhatsApp send error", status, JSON.stringify(data || err?.message || err));
-    return { ok: false, status, data };
+    console.log(`❌ WhatsApp send error ${status}:`, JSON.stringify(data || err.message));
+    return false;
   }
 }
 
-async function notifyCommercialLead({ from, company, city, lastUserText }) {
-  if (!COMMERCIAL_PHONE) return;
+async function openaiExtractLead(session) {
+  // Extrai nome/empresa/cidade/estado + resumo curto do interesse
+  if (!OPENAI_API_KEY) return null;
 
-  const msg =
-    `📩 *Novo lead TRÍVIA*\n` +
-    `Cliente: ${from}\n` +
-    (company ? `Empresa: ${company}\n` : "") +
-    (city ? `Cidade/UF: ${city}\n` : "") +
-    `Mensagem: ${lastUserText}`;
+  const lastUserMessages = session.messages
+    .filter((m) => m.role === "user")
+    .slice(-12)
+    .map((m) => `- ${m.text}`)
+    .join("\n");
 
-  // tenta avisar o comercial (pode falhar se o número não aceitar/sem janela)
-  await sendWhatsAppText(COMMERCIAL_PHONE, msg);
+  const sys = `
+Você é um assistente que extrai dados de um lead a partir de uma conversa.
+Retorne APENAS JSON válido.
+Campos:
+{
+ "business_name": string,
+ "city": string,
+ "state": string,
+ "person_name": string,
+ "goal": string
+}
+Se não houver dado, use "".
+`.trim();
+
+  const user = `
+Conversa (últimas mensagens do cliente):
+${lastUserMessages}
+`.trim();
+
+  try {
+    const r = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: OPENAI_MODEL,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: user },
+        ],
+      },
+      {
+        headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+        timeout: 25000,
+      }
+    );
+
+    const content = r?.data?.choices?.[0]?.message?.content?.trim() || "";
+    const json = JSON.parse(content);
+    return json;
+  } catch (e) {
+    // se falhar, tudo bem — fallback vem abaixo
+    return null;
+  }
 }
 
-function commercialMessage() {
-  // Mensagem ultra profissional e direta
-  const phone = COMMERCIAL_PHONE || "—";
-  return (
-    `Perfeito. Vou te passar o contato do nosso comercial agora.\n\n` +
-    `📞 *Comercial TRÍVIA (WhatsApp)*: ${phone}\n` +
-    `Se preferir, me diga seu nome e melhor horário que o time te chama.`
-  );
+function buildLeadReport(session, extracted) {
+  const lead = session.lead || {};
+  const business = extracted?.business_name || lead.business || "";
+  const city = extracted?.city || lead.city || "";
+  const state = extracted?.state || lead.state || "";
+  const person = extracted?.person_name || lead.name || "";
+  const goal = extracted?.goal || "Pediu contato do comercial / contratação.";
+
+  const lastMessages = session.messages
+    .slice(-14)
+    .map((m) => `${m.role === "user" ? "Cliente" : "TRÍVIA"}: ${m.text}`)
+    .join("\n");
+
+  const when = new Date().toLocaleString("pt-BR");
+
+  return `
+📩 *NOVO LEAD — TRÍVIA*
+🕒 ${when}
+
+👤 Nome: ${person || "(não informado)"}
+🏢 Empresa/Negócio: ${business || "(não informado)"}
+📍 Cidade/UF: ${city || "(não informado)"}${state ? "/" + state : ""}
+
+🎯 Interesse: ${goal}
+
+🧾 *Trecho da conversa (últimas mensagens):*
+${lastMessages}
+`.trim();
 }
 
-/** =======================
- * Rotas
- * ======================= */
-
-app.get("/", (req, res) => res.status(200).send("TRÍVIA webhook online ✅"));
-
-app.get("/health", (req, res) => {
-  res.json({
-    ok: true,
-    graph_version: GRAPH_VERSION,
-    has_phone_number_id: Boolean(PHONE_NUMBER_ID),
-    has_whatsapp_token: Boolean(WHATSAPP_TOKEN),
-    has_verify_token: Boolean(VERIFY_TOKEN),
-    has_commercial_phone: Boolean(COMMERCIAL_PHONE),
-    knowledge_loaded: Boolean(KNOWLEDGE_TEXT)
-  });
-});
+// =========================
+// ROTAS META WEBHOOK
+// =========================
 
 // Verificação do webhook (Meta)
 app.get("/webhook", (req, res) => {
@@ -213,21 +248,20 @@ app.get("/webhook", (req, res) => {
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("✅ Webhook verificado.");
     return res.status(200).send(challenge);
   }
-
-  console.log("❌ Falha verificação webhook.");
   return res.sendStatus(403);
 });
 
-// Recebe mensagens
+// Receber mensagens
 app.post("/webhook", async (req, res) => {
-  // IMPORTANTE: responde 200 rápido pra Meta não reenviar
-  res.sendStatus(200);
-
   try {
-    const entry = req.body?.entry?.[0];
+    const body = req.body;
+
+    // Confirma recebimento pra Meta rápido
+    res.sendStatus(200);
+
+    const entry = body?.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
 
@@ -235,95 +269,144 @@ app.post("/webhook", async (req, res) => {
     if (!messages || !messages.length) return;
 
     const msg = messages[0];
-    const from = msg.from; // wa_id do cliente
-    const text = msg?.text?.body ? normalizeText(msg.text.body) : "";
+    const from = msg?.from; // wa_id do cliente (só números)
+    const text = msg?.text?.body || "";
 
     if (!from || !text) return;
 
-    // pega sessão
-    const sess = sessions.get(from) || { stage: "default", company: "", city: "", lastIntent: "" };
+    const session = getSession(from);
+    session.messages.push({ role: "user", text, ts: new Date().toISOString() });
 
-    // 1) intenção: só quer o telefone do comercial
-    if (isJustCommercialContact(text)) {
-      sess.stage = "handoff_done";
-      sess.lastIntent = "commercial_contact";
-      sessions.set(from, sess);
+    // Heurística pra ir capturando dados
+    extractSimpleLeadData(session, text);
 
-      await sendWhatsAppText(from, commercialMessage());
-      await notifyCommercialLead({ from, company: sess.company, city: sess.city, lastUserText: text });
-      return;
-    }
+    // =========================
+    // 1) INTENÇÃO: CONTRATAR / COMERCIAL
+    // =========================
+    if (looksLikeHireIntent(text)) {
+      // evita loop/repetição
+      if (!session.flags.sentCommercialContact) {
+        session.flags.sentCommercialContact = true;
 
-    // 2) intenção: contratar
-    if (isHireIntent(text)) {
-      sess.lastIntent = "hire";
-      sessions.set(from, sess);
+        // manda pro cliente o contato do comercial
+        const prettyPhone = COMMERCIAL_PHONE
+          ? `+${COMMERCIAL_PHONE.replace(/^(\d{2})(\d{2})(\d{5})(\d{4}).*$/, "$1 ($2) $3-$4")}`
+          : "(número não configurado)";
 
-      // se a pessoa só diz “quero contratar”, não vamos enrolar:
-      // pedimos dados UMA vez, mas se ela insistir, a gente entrega o contato.
-      if (!sess.company || !sess.city) {
-        // tenta extrair do texto atual
-        const extracted = extractCompanyAndCity(text);
-        if (extracted.company && !sess.company) sess.company = extracted.company;
-        if (extracted.city && !sess.city) sess.city = extracted.city;
+        const waMe = COMMERCIAL_PHONE ? `https://wa.me/${COMMERCIAL_PHONE}` : "";
 
-        sessions.set(from, sess);
+        const clientReply = `
+Perfeito. Aqui está o contato do nosso comercial:
 
-        // Se ainda não tem dados, pede de forma curtíssima.
-        if (!sess.company || !sess.city) {
-          await sendWhatsAppText(
-            from,
-            "Perfeito. Pra eu direcionar certinho pro comercial: *nome da empresa* e *cidade/UF*?"
-          );
-          return;
+${prettyPhone}
+${waMe}
+
+Pode chamar por lá que eles te atendem agora.
+`.trim();
+
+        await sendWhatsAppMessage(from, clientReply);
+        session.messages.push({ role: "assistant", text: clientReply, ts: new Date().toISOString() });
+      }
+
+      // =========================
+      // 2) NOTIFICAÇÃO + RELATÓRIO pro COMERCIAL
+      // =========================
+      if (!session.flags.sentCommercialReport) {
+        session.flags.sentCommercialReport = true;
+
+        // Extrai melhor via OpenAI (se disponível). Se não, segue com fallback.
+        const extracted = await openaiExtractLead(session);
+
+        const report = buildLeadReport(session, extracted);
+
+        if (COMMERCIAL_PHONE) {
+          const ok = await sendWhatsAppMessage(COMMERCIAL_PHONE, report);
+
+          // Se falhar: geralmente é porque o comercial não abriu janela de 24h.
+          if (!ok) {
+            console.log("⚠️ Não consegui notificar o comercial. Verifique se o número do comercial já mandou mensagem pro número oficial da TRÍVIA (janela 24h) ou use template.");
+          }
+        } else {
+          console.log("⚠️ COMMERCIAL_PHONE não configurado.");
         }
       }
 
-      // Já tem dados -> entrega contato e notifica comercial
-      await sendWhatsAppText(from, commercialMessage());
-      await notifyCommercialLead({ from, company: sess.company, city: sess.city, lastUserText: text });
-      sess.stage = "handoff_done";
-      sessions.set(from, sess);
       return;
     }
 
-    // 3) Se o cliente respondeu com empresa/cidade enquanto estava no fluxo de contratar
-    if (sess.lastIntent === "hire" && (text.length >= 3)) {
-      const extracted = extractCompanyAndCity(text);
-      if (extracted.company && !sess.company) sess.company = extracted.company;
-      if (extracted.city && !sess.city) sess.city = extracted.city;
-
-      sessions.set(from, sess);
-
-      // Se ele já passou algo, não enrola: já manda o comercial.
-      if (sess.company || sess.city) {
-        await sendWhatsAppText(from, commercialMessage());
-        await notifyCommercialLead({ from, company: sess.company, city: sess.city, lastUserText: text });
-        sess.stage = "handoff_done";
-        sessions.set(from, sess);
-        return;
-      }
+    // =========================
+    // 3) FLUXO NORMAL (resposta padrão via OpenAI + KB)
+    // =========================
+    const assistantText = await generateAssistantReply(text, session);
+    if (assistantText) {
+      await sendWhatsAppMessage(from, assistantText);
+      session.messages.push({ role: "assistant", text: assistantText, ts: new Date().toISOString() });
     }
-
-    // 4) Conversa normal (resposta simples, sem travar)
-    // (Aqui você pode plugar OpenAI depois. Por enquanto: resposta objetiva e profissional.)
-    await sendWhatsAppText(
-      from,
-      "Entendi. Me diz rapidinho: você quer *agendar*, *pedidos/orçamentos* ou *organizar o atendimento* no WhatsApp?"
-    );
   } catch (err) {
     console.log("❌ Webhook handler error:", err?.message || err);
-    // como já respondemos 200 pra Meta, não precisa fazer nada aqui
+    // já respondemos 200 acima, então só loga
   }
 });
 
-/** =======================
- * Start
- * ======================= */
+// =========================
+// GERAR RESPOSTA (OpenAI + KB)
+// =========================
+async function generateAssistantReply(userText, session) {
+  if (!OPENAI_API_KEY) {
+    return "No momento estou com instabilidade. Pode repetir sua mensagem, por favor?";
+  }
 
-await loadKnowledge();
-logEnvSafe();
+  // contexto curto (não deixar gigantesco)
+  const history = session.messages.slice(-12).map((m) => ({
+    role: m.role,
+    content: m.text,
+  }));
 
+  const system = `
+Você é a TRÍVIA, uma central de atendimento inteligente e humanizada no WhatsApp.
+Regras:
+- Seja direto, educado, ultra profissional.
+- Nunca invente links oficiais.
+- Quando o cliente pedir para contratar, contato do comercial, telefone do comercial ou falar com comercial: responda curto e encaminhe (o servidor já faz isso).
+- Mantenha foco em atendimento, WhatsApp e automação.
+`.trim();
+
+  const kb = KNOWLEDGE_BASE
+    ? `\n\nBase de conhecimento (use apenas como referência):\n${KNOWLEDGE_BASE.slice(0, 12000)}`
+    : "";
+
+  try {
+    const r = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: OPENAI_MODEL,
+        temperature: 0.4,
+        messages: [
+          { role: "system", content: system + kb },
+          ...history,
+          { role: "user", content: userText },
+        ],
+      },
+      {
+        headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+        timeout: 25000,
+      }
+    );
+
+    const content = r?.data?.choices?.[0]?.message?.content?.trim();
+    return content || "Perfeito. Como posso te ajudar?";
+  } catch (e) {
+    return "Tive uma instabilidade agora. Pode repetir sua mensagem em uma frase, por favor?";
+  }
+}
+
+// =========================
+// START
+// =========================
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
+  console.log(`PORT: ${PORT}`);
+  console.log(`GRAPH_VERSION: ${GRAPH_VERSION}`);
+  console.log(`PHONE_NUMBER_ID: ${String(PHONE_NUMBER_ID || "").slice(0, 3)}***${String(PHONE_NUMBER_ID || "").slice(-4)}`);
+  console.log(`COMMERCIAL_PHONE: ${COMMERCIAL_PHONE || "(vazio)"}`);
 });

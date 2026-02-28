@@ -1,391 +1,251 @@
-/**
- * TRÍVIA WhatsApp Webhook Server (Mel)
- * - Express + Axios
- * - OpenAI Responses API
- * - Dedup de mensagens
- * - Handoff Comercial (passa telefone e avisa o comercial)
- *
- * ENV obrigatórias:
- *  VERIFY_TOKEN
- *  WHATSAPP_TOKEN
- *  PHONE_NUMBER_ID
- *  GRAPH_VERSION (ex: v20.0)
- *  OPENAI_API_KEY
- *
- * ENV recomendadas:
- *  OPENAI_MODEL (ex: gpt-4.1-mini)
- *  COMMERCIAL_PHONE (ex: 5531997373954)
- */
+import express from "express";
+import axios from "axios";
+import crypto from "crypto";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const express = require("express");
-const axios = require("axios");
-const crypto = require("crypto");
-const fs = require("fs");
-const path = require("path");
+// ============================
+// Helpers / Paths (ESM)
+// ============================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const app = express();
-app.use(express.json({ limit: "2mb" }));
+// ============================
+// ENV
+// ============================
+const PORT = process.env.PORT || 8080;
 
-// ---------- ENV ----------
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "";
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID || "";
-const GRAPH_VERSION = process.env.GRAPH_VERSION || "v20.0";
+const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0"; // <-- importante
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-const COMMERCIAL_PHONE = (process.env.COMMERCIAL_PHONE || "").replace(/\D/g, "");
 
-// ---------- Safety: never crash ----------
-process.on("unhandledRejection", (err) => {
-  console.error("❌ unhandledRejection:", err?.message || err);
-});
-process.on("uncaughtException", (err) => {
-  console.error("❌ uncaughtException:", err?.message || err);
-});
+const COMMERCIAL_PHONE = (process.env.COMMERCIAL_PHONE || "").replace(/\D/g, ""); // ex: 5531997373954
 
-// ---------- Knowledge base (optional) ----------
-let TRIVIA_KNOWLEDGE = "";
-try {
-  const kbPath = path.join(__dirname, "knowledge", "trivia_base.txt");
-  if (fs.existsSync(kbPath)) {
-    TRIVIA_KNOWLEDGE = fs.readFileSync(kbPath, "utf8");
-    console.log("✅ Base carregada (knowledge/trivia_base.txt)");
-  } else {
-    console.log("ℹ️ Base não encontrada (opcional): knowledge/trivia_base.txt");
-  }
-} catch (e) {
-  console.log("⚠️ Falha ao carregar base:", e?.message || e);
+// ============================
+// Basic validation logs
+// ============================
+function mask(s, keep = 4) {
+  if (!s) return "";
+  const str = String(s);
+  if (str.length <= keep) return "*".repeat(str.length);
+  return "*".repeat(Math.max(0, str.length - keep)) + str.slice(-keep);
 }
 
-// ---------- In-memory session store ----------
-const sessions = new Map(); // key: wa_id -> { history: [], meta: {}, lastSeenAt, greeted, handoff, lead: {company, city} }
-const seenMessageIds = new Map(); // msgId -> timestamp
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24; // 24h
-const DEDUP_TTL_MS = 1000 * 60 * 60; // 1h
+console.log("✅ TRÍVIA iniciando...");
+console.log("PORT:", PORT);
+console.log("GRAPH_VERSION:", GRAPH_VERSION);
+console.log("PHONE_NUMBER_ID:", PHONE_NUMBER_ID ? mask(PHONE_NUMBER_ID, 4) : "(vazio)");
+console.log("WHATSAPP_TOKEN:", WHATSAPP_TOKEN ? mask(WHATSAPP_TOKEN, 6) : "(vazio)");
+console.log("OPENAI_API_KEY:", OPENAI_API_KEY ? mask(OPENAI_API_KEY, 6) : "(vazio)");
+console.log("COMMERCIAL_PHONE:", COMMERCIAL_PHONE ? COMMERCIAL_PHONE : "(vazio)");
 
-function now() {
-  return Date.now();
+// ============================
+// Load knowledge base
+// ============================
+const KNOWLEDGE_PATH = path.join(__dirname, "knowledge", "trivia_base.txt");
+let KNOWLEDGE_TEXT = "";
+
+async function loadKnowledge() {
+  try {
+    KNOWLEDGE_TEXT = await fs.readFile(KNOWLEDGE_PATH, "utf8");
+    console.log(`✅ Base carregada (${path.relative(__dirname, KNOWLEDGE_PATH)})`);
+  } catch (err) {
+    console.log(`⚠️ Base não encontrada em ${KNOWLEDGE_PATH}. (ok, mas recomendo criar)`);
+    KNOWLEDGE_TEXT = "";
+  }
 }
 
-function cleanup() {
-  const t = now();
+// ============================
+// Express
+// ============================
+const app = express();
+app.use(express.json({ limit: "2mb" }));
 
-  // sessions
-  for (const [k, s] of sessions.entries()) {
-    if (!s?.lastSeenAt || t - s.lastSeenAt > SESSION_TTL_MS) sessions.delete(k);
-  }
+// ============================
+// In-memory state
+// ============================
 
-  // dedup
+// dedupe: guarda IDs de mensagens recebidas por 10 min
+const seenMessageIds = new Map(); // id -> timestamp
+const SEEN_TTL_MS = 10 * 60 * 1000;
+
+// conversa curta por contato (wa_id)
+const convo = new Map(); // wa_id -> [{role, content}, ...]
+const MAX_TURNS = 16;
+
+function cleanupSeen() {
+  const now = Date.now();
   for (const [id, ts] of seenMessageIds.entries()) {
-    if (t - ts > DEDUP_TTL_MS) seenMessageIds.delete(id);
+    if (now - ts > SEEN_TTL_MS) seenMessageIds.delete(id);
   }
 }
-setInterval(cleanup, 60_000).unref();
+setInterval(cleanupSeen, 60 * 1000).unref();
 
-function getSession(waId) {
-  if (!sessions.has(waId)) {
-    sessions.set(waId, {
-      history: [],
-      meta: {},
-      greeted: false,
-      handoff: { askedLeadOnce: false, done: false },
-      lead: { company: "", city: "" },
-      lastSeenAt: now(),
-    });
-  }
-  const s = sessions.get(waId);
-  s.lastSeenAt = now();
-  return s;
+// ============================
+// WhatsApp API
+// ============================
+function waUrl() {
+  // ✅ O erro 2500 era porque você estava usando /{id}/messages sem versão
+  return `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
 }
 
-// ---------- Helpers ----------
-function normalizeText(t) {
-  return (t || "").toString().trim();
-}
-
-function lower(t) {
-  return normalizeText(t).toLowerCase();
-}
-
-function isHandoffIntent(text) {
-  const t = lower(text);
-  const patterns = [
-    "contratar",
-    "quero contratar",
-    "assinar",
-    "fechar",
-    "comercial",
-    "telefone do comercial",
-    "numero do comercial",
-    "passa o telefone",
-    "falar com atendente",
-    "falar com humano",
-    "transferir",
-    "vendedor",
-    "vendas",
-    "quero comprar",
-    "quero falar com",
-    "contato",
-    "me passa o contato",
-  ];
-  return patterns.some((p) => t.includes(p));
-}
-
-function looksLikeLeadInfo(text) {
-  // aceita algo como: "Salão Chanel. De Mateus Leme minas gerais"
-  // ou "empresa X, cidade Y"
-  const t = normalizeText(text);
-  if (!t) return false;
-  // heurística: tem pelo menos 2 palavras e alguma pista de localidade
-  const hasCityHint = /mg|sp|rj|pr|sc|rs|ba|go|df|minas|gerais|cidade|estado|de\s+[A-Za-zÀ-ÿ]/i.test(t);
-  const hasCompanyHint = /empresa|sal[ãa]o|loja|cl[ií]nica|oficina|barbearia|restaurante|lanchonete|studio/i.test(t) || t.split(/\s+/).length >= 3;
-  return hasCityHint || hasCompanyHint;
-}
-
-function extractLead(text) {
-  // extração simples, sem forçar: pega antes do "de" como empresa; depois como cidade
-  // Ex: "Salão Chanel. De Mateus Leme minas gerais"
-  const raw = normalizeText(text);
-  let company = "";
-  let city = "";
-
-  const m = raw.match(/(.+?)\s*(?:-|,|\.|\s)\s*de\s+(.+)/i);
-  if (m) {
-    company = normalizeText(m[1]).replace(/^(empresa|nome da empresa)\s*[:\-]?\s*/i, "");
-    city = normalizeText(m[2]);
-    return { company, city };
+async function sendWhatsAppText(to, text) {
+  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
+    console.log("❌ WHATSAPP_TOKEN ou PHONE_NUMBER_ID vazio. Não dá pra enviar.");
+    return;
   }
 
-  // caso "Empresa X, Cidade Y"
-  const m2 = raw.match(/empresa\s*[:\-]?\s*(.+?)[,\.]\s*(.+)/i);
-  if (m2) {
-    company = normalizeText(m2[1]);
-    city = normalizeText(m2[2]);
-    return { company, city };
-  }
-
-  // fallback: se tiver muitas palavras, assume primeiras como empresa e últimas como cidade
-  const parts = raw.split(/[,\.\-]/).map((x) => normalizeText(x)).filter(Boolean);
-  if (parts.length >= 2) {
-    company = parts[0];
-    city = parts.slice(1).join(" - ");
-  }
-
-  return { company, city };
-}
-
-function waMeLink(phoneDigits) {
-  const p = (phoneDigits || "").replace(/\D/g, "");
-  if (!p) return "";
-  return `https://wa.me/${p}`;
-}
-
-function shortId() {
-  return crypto.randomBytes(6).toString("hex");
-}
-
-// ---------- WhatsApp API ----------
-async function sendWhatsAppMessage(to, body) {
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body: text }
+  };
 
   try {
-    const payload = {
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body },
-    };
-
-    await axios.post(url, payload, {
+    const res = await axios.post(waUrl(), payload, {
       headers: {
         Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      timeout: 15000,
-      validateStatus: () => true,
-    }).then((r) => {
-      if (r.status >= 200 && r.status < 300) return;
-
-      // log leve (sem flood)
-      const dataStr = typeof r.data === "string" ? r.data : JSON.stringify(r.data || {});
-      console.error(`❌ WhatsApp send error ${r.status}:`, dataStr.slice(0, 500));
+      timeout: 15000
     });
+    return res.data;
   } catch (err) {
-    console.error("❌ sendWhatsAppMessage exception:", err?.message || err);
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    console.log(`❌ WhatsApp send error ${status || ""}:`, JSON.stringify(data || err.message));
+    throw err;
   }
 }
 
-// ---------- OpenAI ----------
-function buildSystemPrompt() {
-  return `
-Você é a **Mel**, atendente da TRÍVIA (slogan: "tecnologia que responde").
-Objetivo: criar uma conversa **humana, leve e fluida**, com educação e simpatia, poucos emojis (sem exagero).
-Regra importante: você NÃO fica repetindo perguntas iguais. Se a pessoa não quiser responder algo, você segue.
-
-ESCOPO:
-- Você pode conversar sobre: atendimento ao cliente no WhatsApp, automação, triagem, agendamento, pedidos, orçamento, relatórios, integração, benefícios, implantação e planos da TRÍVIA (Basic, Plus, Master, Ultra).
-- Se o usuário puxar assunto totalmente fora (receitas, espiritualidade, casamento, etc.), você responde com delicadeza, puxa de volta para atendimento/WhatsApp/TRÍVIA e oferece ajuda nesse universo. Sem bronca.
-
-COMERCIAL/HANDOFF:
-- Quando o usuário pedir "contratar", "comercial", "telefone", "falar com humano", "transferir", etc:
-  1) Se já tiver empresa e cidade, confirme em 1 linha e diga que vai passar o contato.
-  2) Se não tiver, pergunte UMA ÚNICA vez por empresa e cidade (curto).
-  3) Se mesmo assim ele insistir só no telefone, você entrega o telefone do comercial e segue.
-
-ESTILO:
-- Começo (primeira mensagem após “oi/boa tarde”): faça conexão humana breve (ex: "Como foi seu dia?") e só depois pergunta com suavidade se ele já conhecia a TRÍVIA ou chegou por curiosidade.
-- Nada de “como posso ajudar?” repetitivo.
-- Evite frases tipo “universo do atendimento” repetidas. Varie.
-`;
+function normText(s) {
+  return (s || "").toString().trim();
 }
 
-async function generateAIReply(session, userText) {
-  const system = buildSystemPrompt();
+function isCommercialIntent(textRaw) {
+  const t = normText(textRaw).toLowerCase();
+  // ✅ sem enrolar: se pedir contratar / comercial / telefone / falar com humano
+  return (
+    t.includes("contratar") ||
+    t.includes("comercial") ||
+    t.includes("telefone") ||
+    t.includes("numero") ||
+    t.includes("número") ||
+    t.includes("falar com") ||
+    t.includes("humano") ||
+    t.includes("atendente") ||
+    t.includes("vendedor") ||
+    t.includes("vendas") ||
+    t.includes("orçamento") ||
+    t.includes("orcamento") ||
+    t.includes("preço") ||
+    t.includes("preco")
+  );
+}
 
-  // histórico curto (não deixar gigante)
-  const history = session.history.slice(-12).map((m) => ({
-    role: m.role,
-    content: [{ type: "text", text: m.text }],
-  }));
+function formatPhoneBR(e164digits) {
+  // recebe algo tipo 5531997373954
+  if (!e164digits) return "";
+  const d = e164digits.replace(/\D/g, "");
+  if (d.startsWith("55") && d.length >= 12) {
+    const cc = "+55";
+    const ddd = d.slice(2, 4);
+    const rest = d.slice(4);
+    // tenta formatar como celular: 9XXXX-XXXX
+    if (rest.length === 9) {
+      return `${cc} (${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    }
+    if (rest.length === 8) {
+      return `${cc} (${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+    return `${cc} (${ddd}) ${rest}`;
+  }
+  return `+${d}`;
+}
 
-  // Injeta base (se tiver) sem explodir tokens
-  const kbSnippet = TRIVIA_KNOWLEDGE
-    ? TRIVIA_KNOWLEDGE.slice(0, 12000)
+function waMeLink(e164digits) {
+  // wa.me exige só dígitos
+  const d = (e164digits || "").replace(/\D/g, "");
+  if (!d) return "";
+  return `https://wa.me/${d}`;
+}
+
+// ============================
+// OpenAI (Responses API)
+// ============================
+async function askOpenAI({ wa_id, userText }) {
+  if (!OPENAI_API_KEY) {
+    return "Estou pronta pra te ajudar 😊\n\nMe diz só: você quer entender melhor os serviços, organizar seu atendimento ou falar com o comercial?";
+  }
+
+  const history = convo.get(wa_id) || [];
+
+  const system = `
+Você é a Mel, assistente da TRÍVIA (tecnologia e atendimento no WhatsApp).
+Fale em português do Brasil, de forma natural, educada e objetiva (ultra profissional).
+Nunca discuta “token/chave/api” com clientes.
+Foque em entender o cenário do cliente e orientar de forma humana.
+Se o cliente pedir comercial/contratar/telefone, responda direto com o contato (sem perguntas extras).
+`;
+
+  const kb = KNOWLEDGE_TEXT
+    ? `\n\nBase de conhecimento (use quando ajudar):\n${KNOWLEDGE_TEXT.slice(0, 25000)}`
     : "";
 
   const input = [
-    { role: "system", content: [{ type: "text", text: system }] },
-    ...(kbSnippet
-      ? [{
-          role: "system",
-          content: [{ type: "text", text: `BASE TRÍVIA (trecho):\n${kbSnippet}` }],
-        }]
-      : []),
+    { role: "system", content: system.trim() + kb },
     ...history,
-    { role: "user", content: [{ type: "text", text: userText }] },
+    { role: "user", content: userText }
   ];
 
   try {
-    const r = await axios.post(
+    const res = await axios.post(
       "https://api.openai.com/v1/responses",
       {
         model: OPENAI_MODEL,
         input,
-        temperature: 0.7,
-        max_output_tokens: 350,
+        temperature: 0.6,
+        max_output_tokens: 350
       },
       {
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        timeout: 20000,
-        validateStatus: () => true,
+        timeout: 25000
       }
     );
 
-    if (!(r.status >= 200 && r.status < 300)) {
-      const dataStr = typeof r.data === "string" ? r.data : JSON.stringify(r.data || {});
-      console.error(`❌ OpenAI error ${r.status}:`, dataStr.slice(0, 800));
-      return "Poxa, tive uma instabilidade aqui por alguns segundos 😅 Pode me mandar sua última mensagem de novo?";
-    }
+    const out = res.data?.output_text?.trim();
+    if (!out) return "Entendi. Me conta só um detalhe: qual é o seu objetivo principal com o WhatsApp hoje — organizar, responder mais rápido ou automatizar parte do atendimento?";
 
-    // Responses API geralmente traz output_text
-    const text =
-      r.data?.output_text ||
-      (Array.isArray(r.data?.output)
-        ? r.data.output
-            .flatMap((o) => o.content || [])
-            .filter((c) => c.type === "output_text" || c.type === "text")
-            .map((c) => c.text)
-            .join("\n")
-        : "");
+    // atualiza histórico
+    const newHistory = [
+      ...history,
+      { role: "user", content: userText },
+      { role: "assistant", content: out }
+    ].slice(-MAX_TURNS);
 
-    const reply = normalizeText(text);
-    return reply || "Me conta um pouquinho melhor — o que você quer ver na prática sobre a TRÍVIA?";
+    convo.set(wa_id, newHistory);
+
+    return out;
   } catch (err) {
-    console.error("❌ generateAIReply exception:", err?.message || err);
-    return "Dei uma travadinha rápida aqui 😅 Pode repetir a última mensagem?";
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    console.log(`❌ OpenAI error ${status || ""}:`, JSON.stringify(data || err.message));
+    return "Tive uma instabilidade aqui por um instante. Pode repetir sua última mensagem?";
   }
 }
 
-// ---------- Comercial Handoff ----------
-async function doCommercialHandoff(session, from, userText) {
-  // Se já foi feito, só repassa o telefone (não loopa)
-  if (session.handoff.done) {
-    const phone = COMMERCIAL_PHONE ? `+${COMMERCIAL_PHONE}` : "nosso comercial";
-    const link = COMMERCIAL_PHONE ? waMeLink(COMMERCIAL_PHONE) : "";
-    const msg =
-      COMMERCIAL_PHONE
-        ? `Perfeito. Aqui está o contato do comercial: ${phone}\nSe preferir, pode chamar direto por aqui: ${link}`
-        : `Perfeito. Vou te conectar ao nosso comercial agora.`;
-    await sendWhatsAppMessage(from, msg);
-    return;
-  }
-
-  // tenta capturar lead
-  if (looksLikeLeadInfo(userText)) {
-    const { company, city } = extractLead(userText);
-    if (company) session.lead.company = company;
-    if (city) session.lead.city = city;
-  }
-
-  const hasCompany = !!normalizeText(session.lead.company);
-  const hasCity = !!normalizeText(session.lead.city);
-
-  // Se faltou info, pergunta 1 vez só. Se insistir depois, entrega telefone.
-  if ((!hasCompany || !hasCity) && !session.handoff.askedLeadOnce) {
-    session.handoff.askedLeadOnce = true;
-    await sendWhatsAppMessage(
-      from,
-      "Perfeito — eu te passo o contato do comercial agora. Antes, só pra eu encaminhar certinho: qual é o nome da sua empresa e sua cidade/estado?"
-    );
-    return;
-  }
-
-  // A partir daqui: NÃO pergunta de novo. Entrega contato e avisa comercial.
-  const phone = COMMERCIAL_PHONE ? `+${COMMERCIAL_PHONE}` : "";
-  const link = COMMERCIAL_PHONE ? waMeLink(COMMERCIAL_PHONE) : "";
-
-  const company = session.lead.company ? session.lead.company : "(não informado)";
-  const city = session.lead.city ? session.lead.city : "(não informado)";
-
-  // mensagem para o cliente
-  if (COMMERCIAL_PHONE) {
-    await sendWhatsAppMessage(
-      from,
-      `Fechado. Vou te conectar com o comercial agora.\nContato: ${phone}\nChame direto: ${link}`
-    );
-  } else {
-    await sendWhatsAppMessage(
-      from,
-      "Fechado. Vou te conectar com o comercial agora."
-    );
-  }
-
-  // mensagem para o comercial (se configurado)
-  if (COMMERCIAL_PHONE) {
-    const lastMsgs = session.history
-      .slice(-8)
-      .map((m) => `${m.role === "user" ? "Cliente" : "Mel"}: ${m.text}`)
-      .join("\n");
-
-    const summary =
-      `📌 *Novo lead TRÍVIA*\n` +
-      `• WhatsApp cliente: +${from}\n` +
-      `• Empresa: ${company}\n` +
-      `• Cidade/UF: ${city}\n` +
-      `• Pedido: ${normalizeText(userText).slice(0, 200)}\n\n` +
-      `🧾 *Últimas mensagens:*\n${lastMsgs}`;
-
-    // Aqui: enviamos para o seu WhatsApp comercial
-    await sendWhatsAppMessage(COMMERCIAL_PHONE, summary);
-  }
-
-  session.handoff.done = true;
-}
-
-// ---------- Webhook verify ----------
+// ============================
+// Webhook verify (GET)
+// ============================
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -395,92 +255,88 @@ app.get("/webhook", (req, res) => {
     console.log("✅ Webhook verificado");
     return res.status(200).send(challenge);
   }
+
   return res.sendStatus(403);
 });
 
-// ---------- Webhook receive ----------
+// ============================
+// Webhook receive (POST)
+// ============================
 app.post("/webhook", async (req, res) => {
-  // Sempre responda 200 rápido para o Meta não repetir
+  // sempre responde 200 rápido pro Meta não reenviar
   res.sendStatus(200);
 
   try {
-    const entry = req.body?.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
+    const body = req.body;
+
+    const entry = body?.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
 
     const messages = value?.messages;
-    if (!Array.isArray(messages) || messages.length === 0) return;
+    if (!messages || !messages.length) return;
 
     const msg = messages[0];
-    const msgId = msg.id;
+    const msgId = msg?.id;
+    const from = msg?.from; // wa_id do cliente
+    const text = msg?.text?.body || "";
 
-    // dedup
-    if (msgId) {
-      if (seenMessageIds.has(msgId)) return;
-      seenMessageIds.set(msgId, now());
-    }
-
-    const from = msg.from; // wa_id do cliente
     if (!from) return;
 
-    // texto (por enquanto só text; áudio dá pra fazer depois)
-    let userText = "";
-    if (msg.type === "text") {
-      userText = msg.text?.body || "";
-    } else {
-      // fallback amigável
-      userText = "";
+    // dedupe
+    if (msgId) {
+      if (seenMessageIds.has(msgId)) return;
+      seenMessageIds.set(msgId, Date.now());
     }
 
-    userText = normalizeText(userText);
-    if (!userText) {
-      await sendWhatsAppMessage(from, "Te ouvi por aqui 🙂 Pode me mandar em texto rapidinho?");
+    const userText = normText(text);
+    if (!userText) return;
+
+    // ✅ REGRA: Se pedir comercial/contratar/telefone -> responde direto e encerra o fluxo
+    if (isCommercialIntent(userText)) {
+      if (!COMMERCIAL_PHONE) {
+        await sendWhatsAppText(from, "Perfeito. Vou te colocar com o comercial.\n\nMe chama por aqui que já te direciono.");
+        return;
+      }
+
+      const phonePretty = formatPhoneBR(COMMERCIAL_PHONE);
+      const link = waMeLink(COMMERCIAL_PHONE);
+
+      // 1) manda pro cliente o contato do comercial
+      await sendWhatsAppText(
+        from,
+        `Perfeito. Aqui está o contato do nosso comercial:\n${phonePretty}\n${link}\n\nPode chamar por lá que eles te atendem agora.`
+      );
+
+      // 2) tenta avisar o comercial (se falhar, não quebra)
+      const leadLine = `📩 Novo pedido de comercial\nCliente: ${from}\nMensagem: "${userText}"\nData: ${new Date().toLocaleString("pt-BR")}`;
+      try {
+        await sendWhatsAppText(COMMERCIAL_PHONE, leadLine);
+      } catch (e) {
+        console.log("⚠️ Não consegui avisar o comercial via API (normal se não estiver em janela 24h).");
+      }
+
       return;
     }
 
-    const session = getSession(from);
-
-    // guarda histórico
-    session.history.push({ role: "user", text: userText });
-
-    // 1) Se for intenção de contratar/comercial → handoff determinístico (sem IA)
-    if (isHandoffIntent(userText)) {
-      await doCommercialHandoff(session, from, userText);
-      return;
-    }
-
-    // 2) Se o usuário respondeu com lead info logo depois da pergunta do comercial,
-    // e a conversa ainda está no modo handoff (askedLeadOnce == true e done == false),
-    // então finaliza o handoff SEM cair em conversa aleatória.
-    if (session.handoff.askedLeadOnce && !session.handoff.done && looksLikeLeadInfo(userText)) {
-      await doCommercialHandoff(session, from, userText);
-      return;
-    }
-
-    // 3) Primeira interação: saudação humana (sem “como posso ajudar?”)
-    if (!session.greeted) {
-      session.greeted = true;
-      const greet =
-        "Oi! 🙂 Aqui é a Mel.\n" +
-        "Como foi seu dia hoje?\n\n" +
-        "E me conta: você já conhecia a TRÍVIA ou caiu aqui por curiosidade?";
-      session.history.push({ role: "assistant", text: greet });
-      await sendWhatsAppMessage(from, greet);
-      return;
-    }
-
-    // 4) IA responde normal
-    const reply = await generateAIReply(session, userText);
-    session.history.push({ role: "assistant", text: reply });
-    await sendWhatsAppMessage(from, reply);
+    // fluxo normal com OpenAI
+    const reply = await askOpenAI({ wa_id: from, userText });
+    await sendWhatsAppText(from, reply);
   } catch (err) {
-    console.error("❌ webhook handler error:", err?.message || err);
-    // não fazemos res aqui porque já respondemos 200
+    console.log("❌ Webhook handler error:", err?.message || err);
   }
 });
 
-// ---------- Health ----------
-app.get("/", (req, res) => res.status(200).send("OK TRIVIA"));
+// ============================
+// Health
+// ============================
+app.get("/", (req, res) => res.status(200).send("TRÍVIA webhook OK"));
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
+// ============================
+// Start
+// ============================
+await loadKnowledge();
+
+app.listen(PORT, () => {
+  console.log(`✅ Servidor rodando na porta ${PORT}`);
+});

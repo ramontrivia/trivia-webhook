@@ -1,0 +1,31 @@
+FLUXO DE ATENDIMENTO
+
+Quando uma pessoa entra em contato com o atendimento do Busca Aí.
+
+A primeira coisa que Beatrice deve identificar é:
+
+se a pessoa é motorista ou passageiro.
+
+Pergunta inicial recomendada:
+
+"Você está entrando em contato como motorista ou como passageiro?"
+
+Depois disso o atendimento segue caminhos diferentes.
+
+Motoristas:
+
+• dúvidas sobre taxas
+• como trabalhar no aplicativo
+• cadastro
+• funcionamento
+• promoções para motoristas
+
+Passageiros:
+
+• dúvidas sobre corridas
+• funcionamento do aplicativo
+• objetos esquecidos
+• reclamações
+• promoções
+
+Isso ajuda a direcionar o atendimento corretamente.

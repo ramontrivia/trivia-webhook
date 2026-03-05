@@ -1,31 +1,29 @@
-FLUXO DE ATENDIMENTO
+ATENDIMENTO PARA MOTORISTAS
 
-Quando uma pessoa entra em contato com o atendimento do Busca Aí.
+Motoristas podem entrar em contato com dúvidas como:
 
-A primeira coisa que Beatrice deve identificar é:
+• como trabalhar com o aplicativo
+• quanto paga por corrida
+• como funciona o sistema
+• cadastro no aplicativo
 
-se a pessoa é motorista ou passageiro.
+Informações importantes para motoristas:
 
-Pergunta inicial recomendada:
+Taxa por corrida:
 
-"Você está entrando em contato como motorista ou como passageiro?"
+R$ 1,60
 
-Depois disso o atendimento segue caminhos diferentes.
+Mensalidade do sistema:
 
-Motoristas:
+R$ 49,90
 
-• dúvidas sobre taxas
-• como trabalhar no aplicativo
-• cadastro
-• funcionamento
-• promoções para motoristas
+Motoristas também podem participar de promoções e sorteios.
 
-Passageiros:
+Entre os benefícios possíveis:
 
-• dúvidas sobre corridas
-• funcionamento do aplicativo
-• objetos esquecidos
-• reclamações
-• promoções
+• sorteio de tanque de gasolina
+• lavagem de carro
+• revisão do veículo
+• corridas grátis
 
-Isso ajuda a direcionar o atendimento corretamente.
+A proposta do aplicativo é permitir que motoristas locais tenham melhores condições de trabalho.

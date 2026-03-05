@@ -1,29 +1,115 @@
-ATENDIMENTO PARA MOTORISTAS
+BASE CONTRATUAL PARA MOTORISTAS DO BUSCA AÍ
 
-Motoristas podem entrar em contato com dúvidas como:
+Este documento serve como base de consulta para informações relacionadas ao contrato de prestação de serviços entre motoristas parceiros e a plataforma Busca Aí.
 
-• como trabalhar com o aplicativo
-• quanto paga por corrida
-• como funciona o sistema
-• cadastro no aplicativo
+O Busca Aí atua como uma plataforma de intermediação entre passageiros e motoristas parceiros.
 
-Informações importantes para motoristas:
+O motorista parceiro utiliza o aplicativo para oferecer serviços de transporte de passageiros ou mercadorias utilizando veículo próprio.
 
-Taxa por corrida:
+OBJETO DA RELAÇÃO
 
-R$ 1,60
+O motorista parceiro utiliza a plataforma digital do Busca Aí para receber solicitações de corrida realizadas por usuários do aplicativo.
 
-Mensalidade do sistema:
+O motorista possui liberdade para aceitar ou não as corridas de acordo com sua disponibilidade.
 
-R$ 49,90
+A plataforma atua como intermediadora entre passageiro e motorista.
 
-Motoristas também podem participar de promoções e sorteios.
+DISPONIBILIDADE DO MOTORISTA
 
-Entre os benefícios possíveis:
+O motorista decide quando deseja trabalhar.
 
-• sorteio de tanque de gasolina
-• lavagem de carro
-• revisão do veículo
-• corridas grátis
+Não existe obrigação de horário fixo.
 
-A proposta do aplicativo é permitir que motoristas locais tenham melhores condições de trabalho.
+O motorista pode:
+
+• aceitar corridas
+• recusar corridas
+• ficar online ou offline no aplicativo
+
+de acordo com sua própria disponibilidade.
+
+CONDUTA DURANTE AS CORRIDAS
+
+Durante as viagens realizadas através do aplicativo, o motorista deve manter comportamento adequado e profissional.
+
+Entre as regras esperadas:
+
+• respeito com passageiros
+• condução segura
+• ambiente confortável
+• cumprimento das regras do aplicativo
+
+O objetivo é garantir uma experiência segura e confortável para os passageiros.
+
+RESPONSABILIDADE PELO VEÍCULO
+
+O motorista é totalmente responsável pelo seu veículo.
+
+Isso inclui:
+
+• combustível
+• manutenção
+• limpeza
+• conservação
+• segurança do veículo
+
+Todos os custos relacionados ao veículo são responsabilidade do motorista.
+
+O veículo deve cumprir todas as normas do Código de Trânsito Brasileiro.
+
+DOCUMENTAÇÃO DO VEÍCULO
+
+O motorista deve manter toda documentação do veículo regularizada.
+
+Isso inclui:
+
+• documentação do DETRAN em dia
+• licenciamento atualizado
+• vistoria quando necessária
+• cumprimento das normas do CONTRAN
+
+SEGURANÇA
+
+O motorista deve manter todos os equipamentos obrigatórios de segurança exigidos por lei.
+
+Em caso de acidentes, a responsabilidade é do motorista condutor do veículo.
+
+RELAÇÃO ENTRE MOTORISTA E PLATAFORMA
+
+O motorista parceiro não possui vínculo empregatício com a plataforma Busca Aí.
+
+A relação existente é de prestação de serviço intermediada pela plataforma digital.
+
+Isso significa que:
+
+• não existe relação trabalhista
+• não existe subordinação
+• não existem encargos sociais entre as partes
+
+CONFIDENCIALIDADE
+
+Motoristas parceiros devem manter sigilo sobre informações relacionadas à plataforma e aos usuários.
+
+Informações internas da plataforma ou dados de clientes não devem ser divulgados a terceiros.
+
+PRAZO DO CONTRATO
+
+O contrato de prestação de serviço possui validade de 24 meses a partir da assinatura.
+
+RESCISÃO
+
+O contrato pode ser encerrado por qualquer uma das partes mediante aviso prévio de 30 dias.
+
+Motorista deve ter em sua carteira de hablitação EAR exerce atividade remunerada para operar no aplicativo
+
+Em casos de descumprimento das regras da plataforma, a rescisão pode ocorrer imediatamente.
+
+FORO
+
+Eventuais questões jurídicas relacionadas ao contrato devem ser tratadas no foro da comarca de Mateus Leme - MG.
+
+FINALIDADE DESTE DOCUMENTO
+
+Este material serve apenas como base de consulta para esclarecimento de dúvidas.
+
+A assistente Beatrice pode utilizar essas informações para orientar motoristas parceiros quando surgirem perguntas relacionadas às regras da plataforma.

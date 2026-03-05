@@ -28,6 +28,15 @@ const COMMERCIAL_PHONE = normalizePhone(process.env.COMMERCIAL_PHONE || ""); // 
 const KNOWLEDGE_DIR = path.join(process.cwd(), "knowledge");
 let KNOWLEDGE_BASE = "";
 
+// detectar cliente baseado no número do WhatsApp
+function detectClient(phoneNumberId) {
+  if (phoneNumberId === process.env.PHONE_NUMBER_ID_BUSCAI) {
+    return "cliente_buscai";
+  }
+
+  return "trivia";
+}
+
 function loadAllKnowledgeTxt() {
   try {
     if (!fs.existsSync(KNOWLEDGE_DIR)) {
@@ -456,3 +465,4 @@ app.post("/webhook", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
 });
+

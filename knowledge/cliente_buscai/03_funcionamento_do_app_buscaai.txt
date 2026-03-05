@@ -1,0 +1,16 @@
+FUNCIONAMENTO DO BUSCA AÍ
+
+O Busca Aí permite que passageiros solicitem corridas com motoristas da própria cidade.
+
+O funcionamento do aplicativo é simples.
+
+Passo a passo:
+
+1 o passageiro abre o aplicativo
+2 solicita uma corrida
+3 um motorista próximo aceita
+4 o motorista realiza a corrida
+
+O objetivo do aplicativo é facilitar o transporte em cidades menores onde muitas vezes existe pouca disponibilidade de corridas.
+
+O aplicativo também permite que motoristas locais tenham uma plataforma para trabalhar dentro da própria cidade.

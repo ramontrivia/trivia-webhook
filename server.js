@@ -1,4 +1,4 @@
-// server.js (ESM) - TRÍVIA Webhook (WhatsApp Cloud API) + OpenAI + Notificação Comercial
+// server.js (ESM) - TRÍVIA Webhook (WhatsApp Cloud API) + OpenAI + Multi-Client (TRIVIA + BUSCA AI)
 import express from "express";
 import axios from "axios";
 import fs from "fs";
@@ -13,76 +13,132 @@ app.use(express.json({ limit: "2mb" }));
 const PORT = process.env.PORT || 8080;
 
 const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0";
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID; // ex: 938629096008107
+
+// TRIVIA (default)
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+
+// BUSCA AI
+const PHONE_NUMBER_ID_BUSCAI = process.env.PHONE_NUMBER_ID_BUSCAI; // ex: 1002191916312857
+const WHATSAPP_TOKEN_BUSCAI = process.env.WHATSAPP_TOKEN_BUSCAI;   // token permanente do system user do BUSCA AI
+
+// Webhook verify (pode ser 1 só para tudo)
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const COMMERCIAL_PHONE = normalizePhone(process.env.COMMERCIAL_PHONE || ""); // ex: 5531997373954
+const COMMERCIAL_PHONE = normalizePhone(process.env.COMMERCIAL_PHONE || "");
 
 /** =========================
- * Knowledge: carregar TODOS os .txt da pasta /knowledge
+ * Multi-client config
  * ========================= */
-const KNOWLEDGE_DIR = path.join(process.cwd(), "knowledge");
-let KNOWLEDGE_BASE = "";
+const CLIENTS = {
+  trivia: {
+    key: "trivia",
+    phoneNumberId: PHONE_NUMBER_ID,
+    token: WHATSAPP_TOKEN,
+    knowledgeDirs: [
+      // TXT na raiz: /knowledge/*.txt
+      path.join(process.cwd(), "knowledge"),
+      // opcional: /knowledge/trivia/*.txt (se um dia você quiser separar)
+      path.join(process.cwd(), "knowledge", "trivia"),
+    ],
+  },
+  cliente_buscai: {
+    key: "cliente_buscai",
+    phoneNumberId: PHONE_NUMBER_ID_BUSCAI,
+    token: WHATSAPP_TOKEN_BUSCAI,
+    knowledgeDirs: [
+      // TXT do cliente: /knowledge/cliente_buscai/*.txt
+      path.join(process.cwd(), "knowledge", "cliente_buscai"),
+    ],
+  },
+};
 
-// detectar cliente baseado no número do WhatsApp
-function detectClient(phoneNumberId) {
-  if (phoneNumberId === process.env.PHONE_NUMBER_ID_BUSCAI) {
+function detectClientByPhoneNumberId(phoneNumberId) {
+  if (phoneNumberId && PHONE_NUMBER_ID_BUSCAI && String(phoneNumberId) === String(PHONE_NUMBER_ID_BUSCAI)) {
     return "cliente_buscai";
   }
-
   return "trivia";
 }
 
-function loadAllKnowledgeTxt() {
+/** =========================
+ * Knowledge loader (por cliente)
+ * ========================= */
+function listTxtFilesFlat(dir) {
   try {
-    if (!fs.existsSync(KNOWLEDGE_DIR)) {
-      console.log("ℹ️ Pasta /knowledge não encontrada. Seguindo sem base.");
-      return "";
-    }
-
-    const files = fs
-      .readdirSync(KNOWLEDGE_DIR)
-      .filter((f) => f.toLowerCase().endsWith(".txt"))
-      .sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-    if (!files.length) {
-      console.log("ℹ️ Nenhum .txt encontrado em /knowledge. Seguindo sem base.");
-      return "";
-    }
-
-    const parts = [];
-    for (const file of files) {
-      const full = path.join(KNOWLEDGE_DIR, file);
-      const content = fs.readFileSync(full, "utf8");
-      parts.push(
-        `\n\n====================\nARQUIVO: ${file}\n====================\n${content}\n`
-      );
-    }
-
-    console.log(`✅ Knowledge carregado: ${files.length} arquivo(s) .txt`);
-    return parts.join("\n");
-  } catch (e) {
-    console.log("⚠️ Falha ao carregar knowledge:", e.message);
-    return "";
+    if (!fs.existsSync(dir)) return [];
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith(".txt"))
+      .map((d) => path.join(dir, d.name));
+  } catch {
+    return [];
   }
 }
 
-KNOWLEDGE_BASE = loadAllKnowledgeTxt();
+function loadKnowledgeForClient(clientKey) {
+  const cfg = CLIENTS[clientKey] || CLIENTS.trivia;
+  const dirs = cfg.knowledgeDirs || [];
+  const allFiles = [];
+
+  for (const d of dirs) {
+    allFiles.push(...listTxtFilesFlat(d));
+  }
+
+  // remove duplicados e ordena
+  const unique = [...new Set(allFiles)].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  if (!unique.length) {
+    console.log(`ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas. Seguindo sem base.`);
+    return "";
+  }
+
+  const parts = [];
+  for (const full of unique) {
+    const file = path.basename(full);
+    const content = fs.readFileSync(full, "utf8");
+    parts.push(
+      `\n\n====================\nCLIENTE: ${clientKey}\nARQUIVO: ${file}\n====================\n${content}\n`
+    );
+  }
+
+  console.log(`✅ [${clientKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`);
+  return parts.join("\n");
+}
+
+const KNOWLEDGE_CACHE = new Map();
+function getKnowledge(clientKey) {
+  if (!KNOWLEDGE_CACHE.has(clientKey)) {
+    KNOWLEDGE_CACHE.set(clientKey, loadKnowledgeForClient(clientKey));
+  }
+  return KNOWLEDGE_CACHE.get(clientKey) || "";
+}
 
 /** =========================
  * Guards / Validations
  * ========================= */
+function mask(v) {
+  if (!v) return "";
+  const s = String(v);
+  if (s.length <= 6) return "***";
+  return `${s.slice(0, 3)}***${s.slice(-3)}`;
+}
+
 function assertEnv() {
   const missing = [];
-  if (!PHONE_NUMBER_ID) missing.push("PHONE_NUMBER_ID");
-  if (!WHATSAPP_TOKEN) missing.push("WHATSAPP_TOKEN");
   if (!VERIFY_TOKEN) missing.push("VERIFY_TOKEN");
   if (!OPENAI_API_KEY) missing.push("OPENAI_API_KEY");
   if (!COMMERCIAL_PHONE) missing.push("COMMERCIAL_PHONE");
+
+  // TRIVIA
+  if (!PHONE_NUMBER_ID) missing.push("PHONE_NUMBER_ID");
+  if (!WHATSAPP_TOKEN) missing.push("WHATSAPP_TOKEN");
+
+  // BUSCA AI (opcional, mas se quiser funcionar tem que ter)
+  if (!PHONE_NUMBER_ID_BUSCAI) console.log("⚠️ PHONE_NUMBER_ID_BUSCAI ausente (BUSCA AI não vai responder).");
+  if (!WHATSAPP_TOKEN_BUSCAI) console.log("⚠️ WHATSAPP_TOKEN_BUSCAI ausente (BUSCA AI não vai responder).");
 
   if (missing.length) {
     console.error("❌ Variáveis ausentes:", missing.join(", "));
@@ -92,19 +148,25 @@ function assertEnv() {
 
   console.log("PORT:", PORT);
   console.log("GRAPH_VERSION:", GRAPH_VERSION);
-  console.log("PHONE_NUMBER_ID:", mask(PHONE_NUMBER_ID));
+
+  console.log("[TRIVIA] PHONE_NUMBER_ID:", mask(PHONE_NUMBER_ID));
+  console.log("[TRIVIA] WHATSAPP_TOKEN:", mask(WHATSAPP_TOKEN));
+
+  console.log("[BUSCA AI] PHONE_NUMBER_ID_BUSCAI:", mask(PHONE_NUMBER_ID_BUSCAI));
+  console.log("[BUSCA AI] WHATSAPP_TOKEN_BUSCAI:", mask(WHATSAPP_TOKEN_BUSCAI));
+
   console.log("COMMERCIAL_PHONE:", COMMERCIAL_PHONE);
-  console.log("WHATSAPP_TOKEN:", mask(WHATSAPP_TOKEN));
   console.log("OPENAI_API_KEY:", mask(OPENAI_API_KEY));
   console.log("OPENAI_MODEL:", OPENAI_MODEL);
 }
 assertEnv();
 
 /** =========================
- * In-memory state (simples)
+ * In-memory state (separado por cliente)
  * ========================= */
 const sessions = new Map();
 /**
+ * key = `${clientKey}:${userId}`
  * session = {
  *   lead: { name, company, city, state, segment },
  *   history: [{role, text, ts}],
@@ -112,17 +174,17 @@ const sessions = new Map();
  *   leadNotified: boolean
  * }
  */
-
-function getSession(userId) {
-  if (!sessions.has(userId)) {
-    sessions.set(userId, {
+function getSession(clientKey, userId) {
+  const k = `${clientKey}:${userId}`;
+  if (!sessions.has(k)) {
+    sessions.set(k, {
       lead: { name: "", company: "", city: "", state: "", segment: "" },
       history: [],
       lastIntent: "",
       leadNotified: false,
     });
   }
-  return sessions.get(userId);
+  return sessions.get(k);
 }
 
 function pushHistory(session, role, text) {
@@ -137,18 +199,22 @@ function normalizePhone(raw) {
   if (!raw) return "";
   return String(raw).replace(/[^\d]/g, "");
 }
-function mask(v) {
-  if (!v) return "";
-  const s = String(v);
-  if (s.length <= 6) return "***";
-  return `${s.slice(0, 3)}***${s.slice(-3)}`;
+
+function graphMessagesUrl(phoneNumberId) {
+  return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
 }
 
-function graphMessagesUrl() {
-  return `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+function getClientConfig(clientKey) {
+  const cfg = CLIENTS[clientKey] || CLIENTS.trivia;
+  if (!cfg.phoneNumberId || !cfg.token) {
+    console.log(`❌ Config incompleta para clientKey=${clientKey}. phoneNumberId/token ausentes.`);
+  }
+  return cfg;
 }
 
-async function sendWhatsAppText(to, body) {
+async function sendWhatsAppText(clientKey, to, body) {
+  const cfg = getClientConfig(clientKey);
+
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -157,9 +223,9 @@ async function sendWhatsAppText(to, body) {
   };
 
   try {
-    const res = await axios.post(graphMessagesUrl(), payload, {
+    const res = await axios.post(graphMessagesUrl(cfg.phoneNumberId), payload, {
       headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        Authorization: `Bearer ${cfg.token}`,
         "Content-Type": "application/json",
       },
       timeout: 20000,
@@ -168,7 +234,10 @@ async function sendWhatsAppText(to, body) {
   } catch (err) {
     const status = err?.response?.status;
     const data = err?.response?.data;
-    console.error(`❌ WhatsApp send error ${status}:`, JSON.stringify(data || err.message));
+    console.error(
+      `❌ [${clientKey}] WhatsApp send error ${status}:`,
+      JSON.stringify(data || err.message)
+    );
     throw err;
   }
 }
@@ -265,7 +334,7 @@ function formatCommercialContact() {
   return `Fechou 😊 Aqui está o contato do nosso comercial:\n\n${phonePretty}\nhttps://wa.me/${COMMERCIAL_PHONE}\n\nPode chamar por lá que eles te atendem agora.`;
 }
 
-function buildLeadReport(userId, session) {
+function buildLeadReport(clientKey, userId, session) {
   const { name, company, city, state, segment } = session.lead;
   const lastMsgs = session.history
     .slice(-12)
@@ -275,7 +344,7 @@ function buildLeadReport(userId, session) {
   const now = new Date().toLocaleString("pt-BR");
 
   return (
-    `📌 *Novo lead TRÍVIA (quente)*\n` +
+    `📌 *Novo lead (${clientKey})*\n` +
     `🕒 ${now}\n` +
     `👤 WhatsApp (ID): ${userId}\n` +
     `🙋 Nome: ${name || "(não informado)"}\n` +
@@ -287,27 +356,29 @@ function buildLeadReport(userId, session) {
   );
 }
 
-async function notifyCommercialLead(from, session) {
-  // Evita spam múltiplo
+async function notifyCommercialLead(clientKey, from, session) {
   if (session.leadNotified) return;
 
-  const report = buildLeadReport(from, session);
+  const report = buildLeadReport(clientKey, from, session);
 
   try {
-    await sendWhatsAppText(COMMERCIAL_PHONE, report);
+    // envia pelo MESMO número do cliente (clientKey)
+    await sendWhatsAppText(clientKey, COMMERCIAL_PHONE, report);
     session.leadNotified = true;
-    console.log("✅ Lead enviado ao comercial.");
+    console.log(`✅ [${clientKey}] Lead enviado ao comercial.`);
   } catch (e) {
-    // Aqui é onde você vai ver o motivo REAL no log do Railway (ex: 470/131047/24h window)
-    console.error("❌ Falha ao enviar lead ao comercial. Provável janela 24h fechada ou número não opt-in.");
+    console.error(
+      `❌ [${clientKey}] Falha ao enviar lead ao comercial. Provável janela 24h fechada ou número não opt-in.`
+    );
   }
 }
 
 /** =========================
- * OpenAI (MEL - mais humana)
+ * OpenAI (MEL)
  * ========================= */
-async function generateAssistantReply(session, userText) {
-  // MEL: humor leve, humana, provoca conversa, mini simulação antes de comercial
+async function generateAssistantReply(clientKey, session, userText) {
+  const KNOWLEDGE_BASE = getKnowledge(clientKey);
+
   const system = `
 Você é a MEL, atendente oficial da TRÍVIA no WhatsApp.
 
@@ -407,48 +478,50 @@ app.post("/webhook", async (req, res) => {
     const msg = value?.messages?.[0];
     if (!msg) return;
 
-    const from = msg.from; // wa_id do cliente
+    const from = msg.from;
     const text = msg?.text?.body || "";
     if (!from || !text) return;
+
+    // qual número recebeu essa msg (vem do Meta)
+    const incomingPhoneNumberId = value?.metadata?.phone_number_id;
+
+    // decide cliente baseado no phone_number_id recebido
+    const clientKey = detectClientByPhoneNumberId(incomingPhoneNumberId);
+
+    console.log(
+      `📩 Incoming msg | client=${clientKey} | phone_number_id=${incomingPhoneNumberId} | from=${from}`
+    );
 
     // ignora mensagens vindas do próprio comercial (evita loop)
     if (isCommercialNumber(from)) return;
 
-    const session = getSession(from);
+    const session = getSession(clientKey, from);
     pushHistory(session, "user", text);
 
-    // tenta capturar dados do lead quando aparecerem
     extractLeadFields(session, text);
 
     const intent = detectIntent(text);
     session.lastIntent = intent;
 
-    // =============================
-    // HANDOFF (quente: contratar/telefone/planos)
-    // =============================
+    // HANDOFF
     if (intent === "handoff") {
-      // 1) manda contato comercial ao cliente automaticamente
       const contact = formatCommercialContact();
-      await sendWhatsAppText(from, contact);
+      await sendWhatsAppText(clientKey, from, contact);
       pushHistory(session, "assistant", contact);
 
-      // 2) tenta mandar relatório pro comercial (pode falhar se janela 24h fechada)
-      await notifyCommercialLead(from, session);
+      await notifyCommercialLead(clientKey, from, session);
 
-      // 3) confirma ao cliente (sem travar)
       const confirm =
         "Prontinho ✅ Se você me disser o *nome do negócio + cidade*, eu já aviso o time com tudo mastigado pra te atender mais rápido 😉";
-      await sendWhatsAppText(from, confirm);
+      await sendWhatsAppText(clientKey, from, confirm);
       pushHistory(session, "assistant", confirm);
 
       return;
     }
 
-    // =============================
     // Fluxo natural (MEL)
-    // =============================
-    const reply = await generateAssistantReply(session, text);
-    await sendWhatsAppText(from, reply);
+    const reply = await generateAssistantReply(clientKey, session, text);
+    await sendWhatsAppText(clientKey, from, reply);
     pushHistory(session, "assistant", reply);
   } catch (err) {
     console.error(
@@ -465,4 +538,3 @@ app.post("/webhook", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
 });
-

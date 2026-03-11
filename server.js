@@ -1,5 +1,5 @@
 // server.js (ESM) - TRÍVIA Webhook (WhatsApp Cloud API) + OpenAI + Multi-Client
-// Modo seguro: Supabase + fallback para variáveis legadas
+// Supabase + fallback legado + knowledge TXT por cliente
 
 import express from "express";
 import axios from "axios";
@@ -192,7 +192,7 @@ function detectClientByPhoneNumberId(phoneNumberId) {
 }
 
 /** =========================
- * Knowledge loader (por cliente)
+ * Knowledge loader (modelo antigo)
  * ========================= */
 function listTxtFilesFlat(dir) {
   try {
@@ -235,7 +235,7 @@ function loadKnowledgeForClient(clientKey) {
 
   if (!unique.length) {
     console.log(
-      `ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas.`
+      `ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas. Seguindo sem base.`
     );
     return "";
   }
@@ -469,9 +469,14 @@ function formatCommercialContact() {
 function buildLeadReport(clientKey, userId, session) {
   const { name, company, city, state, segment } = session.lead;
 
+  const personaName =
+    clientKey === "busca_ai" || clientKey === "cliente_buscai"
+      ? "Beatrice"
+      : "MEL";
+
   const lastMsgs = session.history
     .slice(-12)
-    .map((m) => `${m.role === "user" ? "Cliente" : "MEL"}: ${m.text}`)
+    .map((m) => `${m.role === "user" ? "Cliente" : personaName}: ${m.text}`)
     .join("\n");
 
   const now = new Date().toLocaleString("pt-BR");
@@ -507,22 +512,49 @@ async function notifyCommercialLead(clientKey, from, session) {
 }
 
 /** =========================
- * OpenAI
+ * OpenAI / Knowledge
  * ========================= */
 async function generateAssistantReply(clientKey, session, userText) {
   const KNOWLEDGE_BASE = getKnowledge(clientKey);
 
+  const isBuscaAi =
+    clientKey === "busca_ai" || clientKey === "cliente_buscai";
+
+  const assistantName = isBuscaAi ? "Beatrice" : "MEL";
+  const companyName = isBuscaAi ? "Busca Aí" : "TRÍVIA";
+
   const system = `
-Você é a MEL, atendente oficial da TRÍVIA no WhatsApp.
+Você é ${assistantName}, atendente oficial da ${companyName} no WhatsApp.
 
-REGRAS:
-- Respostas curtas em blocos.
+PERSONA (essência):
+- Humana, calorosa, inteligente e estratégica.
+- Natural, clara e prestativa.
+- Você não fala como robô.
+
+REGRAS ABSOLUTAS:
+1. Todas as respostas devem ser baseadas prioritariamente na BASE DE CONHECIMENTO abaixo.
+2. Antes de responder, considere que a resposta pode estar nos arquivos fornecidos.
+3. Se a informação existir na base, você deve usá-la.
+4. Você nunca deve dizer que não possui uma informação se ela estiver na base.
+5. Você nunca deve inventar links, telefones, e-mails, regras, orientações, preços, políticas, funcionalidades ou instruções fora da base.
+6. Se houver links oficiais na base e o usuário pedir download, app, aplicativo, instalar, cadastro, passageiro ou motorista, você deve enviar os links corretos de forma clara.
+7. Nunca fale de código, API, token, servidor, banco de dados, arquivos internos ou sistema interno.
+8. Nunca diga que "consultou arquivos", "consultou TXT", "consultou documento" ou qualquer termo técnico interno.
+
+ESTILO:
+- Mensagens curtas em blocos (WhatsApp).
 - No máximo 1 pergunta por mensagem.
-- Não invente preços, planos, emails ou telefones.
-- Nunca fale de código, API, token ou servidor.
-- Seja humana, natural e objetiva.
+- Linguagem brasileira natural.
+- Pode usar 0-1 emoji por mensagem, com moderação.
+- Sempre conduza para o próximo passo de forma natural.
 
-BASE DE CONHECIMENTO:
+INSTRUÇÃO FINAL:
+Responda com base prioritária na BASE DE CONHECIMENTO abaixo.
+Se a resposta estiver na base, use a base.
+Se houver links na base e o usuário pedir, envie os links.
+Se a base trouxer instruções específicas de atendimento, siga essas instruções.
+
+BASE DE CONHECIMENTO (arquivos TXT):
 ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
   `.trim();
 
@@ -541,8 +573,8 @@ ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
       {
         model: OPENAI_MODEL,
         messages,
-        temperature: 0.7,
-        max_tokens: 260,
+        temperature: 0.4,
+        max_tokens: 320,
       },
       {
         headers: {
@@ -553,9 +585,11 @@ ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
       }
     );
 
+    const out = res.data?.choices?.[0]?.message?.content?.trim();
+
     return (
-      res.data?.choices?.[0]?.message?.content?.trim() ||
-      "Entendi 🙂 Me conta só uma coisa: você quer saber mais sobre como funciona?"
+      out ||
+      "Entendi 🙂 Me explica rapidinho o que você precisa que eu te ajudo."
     );
   } catch (err) {
     console.error(
@@ -563,7 +597,7 @@ ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
       err?.response?.status,
       err?.response?.data || err.message
     );
-    return "Entendi 🙂 Me diz rapidinho como posso te ajudar melhor.";
+    return "Entendi 🙂 Me explica rapidinho o que você precisa que eu te ajudo.";
   }
 }
 
@@ -606,11 +640,6 @@ app.post("/webhook", async (req, res) => {
 
     const incomingPhoneNumberId = value?.metadata?.phone_number_id;
     const clientKey = detectClientByPhoneNumberId(incomingPhoneNumberId);
-
-    if (!clientKey) {
-      console.log(`⚠️ empresa não encontrada: ${incomingPhoneNumberId}`);
-      return;
-    }
 
     console.log(
       `📩 Incoming msg | client=${clientKey} | phone_number_id=${incomingPhoneNumberId} | from=${from}`

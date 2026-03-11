@@ -231,7 +231,9 @@ function loadKnowledgeForClient(clientKey) {
   );
 
   if (!unique.length) {
-    console.log(`ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas.`);
+    console.log(
+      `ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas.`
+    );
     return "";
   }
 
@@ -244,7 +246,9 @@ function loadKnowledgeForClient(clientKey) {
     );
   }
 
-  console.log(`✅ [${clientKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`);
+  console.log(
+    `✅ [${clientKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`
+  );
   return parts.join("\n");
 }
 
@@ -332,7 +336,9 @@ function getClientConfig(clientKey) {
   }
 
   if (!company.phoneNumberId || !company.token) {
-    console.log(`❌ Config incompleta para ${clientKey}. phoneNumberId/token ausentes.`);
+    console.log(
+      `❌ Config incompleta para ${clientKey}. phoneNumberId/token ausentes.`
+    );
     return null;
   }
 
@@ -659,10 +665,4 @@ async function startServer() {
   });
 }
 
-startServer();   Confira linha por linha e me devolva completo certo 
-Respeite exatamente a estrutura atual que já está funcionando, mas corrija apenas o necessário para o Supabase passar a carregar as 2 empresas da tabela companies.
-Não simplifique o sistema.
-Não remova fallback legado.
-Não altere a lógica de atendimento.
-Só corrija o que está impedindo o carregamento do Supabase.
-Se houver qualquer ponto duvidoso, destaque claramente antes do código.
+startServer();

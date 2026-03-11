@@ -1,5 +1,5 @@
 // server.js (ESM) - TRÍVIA Webhook (WhatsApp Cloud API) + OpenAI + Multi-Client
-// Supabase + fallback legado + knowledge TXT por cliente
+// Supabase + fallback legado + knowledge TXT separado por cliente
 
 import express from "express";
 import axios from "axios";
@@ -67,6 +67,15 @@ function makeCompanyKey(name) {
     .replace(/^_+|_+$/g, "");
 }
 
+function normalizeCompanyKey(key) {
+  const k = safeTrim(key);
+
+  if (k === "trivia_tecnologia") return "trivia";
+  if (k === "busca_ai") return "cliente_buscai";
+
+  return k;
+}
+
 /** =========================
  * Companies / Cache
  * ========================= */
@@ -100,13 +109,6 @@ function getLegacyCompanies() {
   }
 
   return companies;
-}
-
-function normalizeCompanyKey(key) {
-  const k = safeTrim(key);
-  if (k === "trivia_tecnologia") return "trivia";
-  if (k === "busca_ai") return "cliente_buscai";
-  return k;
 }
 
 async function loadCompaniesFromSupabase() {
@@ -150,7 +152,6 @@ async function loadCompaniesFromSupabase() {
           phoneNumberId: c.phoneNumberId,
           tokenPresent: !!c.token,
           segment: c.segment,
-          source: c.source,
         }))
       )
     );
@@ -205,7 +206,7 @@ function detectClientByPhoneNumberId(phoneNumberId) {
 }
 
 /** =========================
- * Knowledge loader (modelo antigo)
+ * Knowledge loader (separado por cliente)
  * ========================= */
 function listTxtFilesFlat(dir) {
   try {
@@ -223,10 +224,7 @@ function getKnowledgeDirs(clientKey) {
   const normalizedKey = normalizeCompanyKey(clientKey);
 
   if (normalizedKey === "trivia") {
-    return [
-      path.join(process.cwd(), "knowledge"),
-      path.join(process.cwd(), "knowledge", "trivia"),
-    ];
+    return [path.join(process.cwd(), "knowledge", "trivia")];
   }
 
   if (normalizedKey === "cliente_buscai") {
@@ -237,7 +235,8 @@ function getKnowledgeDirs(clientKey) {
 }
 
 function loadKnowledgeForClient(clientKey) {
-  const dirs = getKnowledgeDirs(clientKey);
+  const normalizedKey = normalizeCompanyKey(clientKey);
+  const dirs = getKnowledgeDirs(normalizedKey);
   const allFiles = [];
 
   for (const d of dirs) {
@@ -250,7 +249,7 @@ function loadKnowledgeForClient(clientKey) {
 
   if (!unique.length) {
     console.log(
-      `ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas. Seguindo sem base.`
+      `ℹ️ [${normalizedKey}] Nenhum .txt encontrado nas pastas configuradas. Seguindo sem base.`
     );
     return "";
   }
@@ -259,14 +258,16 @@ function loadKnowledgeForClient(clientKey) {
   for (const full of unique) {
     const file = path.basename(full);
     const content = fs.readFileSync(full, "utf8");
+
     parts.push(
-      `\n\n====================\nCLIENTE: ${clientKey}\nARQUIVO: ${file}\n====================\n${content}\n`
+      `\n\n====================\nCLIENTE: ${normalizedKey}\nARQUIVO: ${file}\n====================\n${content}\n`
     );
   }
 
   console.log(
-    `✅ [${clientKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`
+    `✅ [${normalizedKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`
   );
+
   return parts.join("\n");
 }
 
@@ -278,6 +279,7 @@ function getKnowledge(clientKey) {
   if (!KNOWLEDGE_CACHE.has(normalizedKey)) {
     KNOWLEDGE_CACHE.set(normalizedKey, loadKnowledgeForClient(normalizedKey));
   }
+
   return KNOWLEDGE_CACHE.get(normalizedKey) || "";
 }
 
@@ -334,6 +336,7 @@ function getSession(clientKey, userId) {
       leadNotified: false,
     });
   }
+
   return sessions.get(k);
 }
 
@@ -410,8 +413,9 @@ const TRIGGER_HOT = [
   "planos",
   "assinar",
   "comercial",
-  "telefone",
   "falar com comercial",
+  "quero falar com comercial",
+  "quero falar com vendedor",
   "vendedor",
   "atendente humano",
   "quero comprar",
@@ -421,17 +425,22 @@ const TRIGGER_HOT = [
 ];
 
 function detectIntent(text) {
-  const t = (text || "").toLowerCase();
+  const t = (text || "").toLowerCase().trim();
 
   if (TRIGGER_HOT.some((k) => t.includes(k))) return "handoff";
   if (t.includes("agendamento")) return "agendamento";
+
   if (
     t.includes("pedido") ||
     t.includes("orçamento") ||
     t.includes("orcamento")
-  )
+  ) {
     return "pedidos";
-  if (t.includes("relatório") || t.includes("relatorio")) return "relatorios";
+  }
+
+  if (t.includes("relatório") || t.includes("relatorio")) {
+    return "relatorios";
+  }
 
   return "general";
 }
@@ -550,12 +559,14 @@ PERSONA:
 
 REGRAS ABSOLUTAS:
 1. Suas respostas devem ser baseadas prioritariamente na BASE DE CONHECIMENTO abaixo.
-2. Se a informação existir na base, você deve usá-la.
-3. Você nunca deve dizer que não possui link, não consegue fornecer link, ou que não pode enviar link, se houver links na base.
-4. Se o usuário pedir baixar, download, instalar, app, aplicativo, cadastro, passageiro ou motorista, você deve procurar essas informações na base e enviar os links oficiais que estiverem nela.
-5. Você nunca deve inventar links, telefones, e-mails, regras ou instruções.
-6. Nunca fale de código, API, token, servidor, banco de dados ou arquivos internos.
-7. Nunca mencione que está lendo arquivos, base, TXT ou documentos.
+2. Você está atendendo exclusivamente a marca ${companyName}. Nunca fale como se fosse outra empresa.
+3. Nunca use informações, links, contatos, regras, nomes ou posicionamentos de outra marca.
+4. Se a informação existir na base, você deve usá-la.
+5. Você nunca deve dizer que não possui link, não consegue fornecer link, ou que não pode enviar link, se houver links na base.
+6. Se o usuário pedir baixar, download, instalar, app, aplicativo, cadastro, passageiro ou motorista, você deve procurar essas informações na base e enviar os links oficiais que estiverem nela.
+7. Você nunca deve inventar links, telefones, e-mails, regras ou instruções.
+8. Nunca fale de código, API, token, servidor, banco de dados ou arquivos internos.
+9. Nunca mencione que está lendo arquivos, base, TXT ou documentos.
 
 COMPORTAMENTO:
 - Respostas curtas em blocos.
@@ -563,8 +574,10 @@ COMPORTAMENTO:
 - Linguagem natural de WhatsApp.
 
 INSTRUÇÃO ESPECIAL:
-Se houver links oficiais na base, envie os links diretamente ao usuário, organizados de forma clara.
-Você está autorizada a enviar links oficiais que estejam na base de conhecimento.
+- Se houver links oficiais na base, envie os links diretamente ao usuário, organizados de forma clara.
+- Você está autorizada a enviar links oficiais que estejam na base de conhecimento.
+- Se o usuário estiver falando de iPhone, iOS, Android, app, instalação ou download, não acione comercial automaticamente.
+- Só acione comercial quando o assunto for claramente contratar, plano, preço, valores, vendedor ou fechar.
 
 BASE DE CONHECIMENTO:
 ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
@@ -585,7 +598,7 @@ ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
       {
         model: OPENAI_MODEL,
         messages,
-        temperature: 0.4,
+        temperature: 0.35,
         max_tokens: 320,
       },
       {
@@ -701,17 +714,4 @@ app.post("/webhook", async (req, res) => {
 
 /** =========================
  * Start
- * ========================= */
-async function startServer() {
-  await refreshCompaniesCache();
-
-  if (!COMPANIES_CACHE.length) {
-    console.log("⚠️ Nenhuma empresa carregada no cache.");
-  }
-
-  app.listen(PORT, () => {
-    console.log(`✅ Servidor rodando na porta ${PORT}`);
-  });
-}
-
-startServer();
+ *

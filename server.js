@@ -483,39 +483,137 @@ function selectBuscaAiLinksByIntent(userText) {
   return { type: "geral", urls: [...iosUrls, ...androidUrls, ...urls] };
 }
 
+function selectBuscaAiLinksByIntent(userText) {
+  const t = (userText || "").toLowerCase();
+  const files = getRawFiles("cliente_buscai");
+  const joined = files.map((f) => `\n${f.file}\n${f.content}\n`).join("\n");
+  const urls = [...new Set(extractUrls(joined))];
+
+  if (!urls.length) return null;
+
+  const iosPassenger = urls.find((u) => u.includes("apple.com")) || null;
+  const androidPassenger =
+    urls.find((u) => u.includes("play.google.com") && u.includes("client")) || null;
+  const androidDriver =
+    urls.find((u) => u.includes("play.google.com") && u.includes("driver")) || null;
+
+  const wantsIOS = t.includes("ios") || t.includes("iphone");
+  const wantsAndroid = t.includes("android");
+  const wantsMotorista = t.includes("motorista");
+  const wantsPassageiro = t.includes("passageiro");
+  const isConfused =
+    t.includes("qual") ||
+    t.includes("qual devo") ||
+    t.includes("qual é o certo") ||
+    t.includes("que confusão") ||
+    t.includes("qual baixar");
+
+  return {
+    iosPassenger,
+    androidPassenger,
+    androidDriver,
+    wantsIOS,
+    wantsAndroid,
+    wantsMotorista,
+    wantsPassageiro,
+    isConfused
+  };
+}
+
 function buildBuscaAiProtectedReply(userText) {
-  const result = selectBuscaAiLinksByIntent(userText);
-  if (!result || !result.urls.length) return null;
+  const data = selectBuscaAiLinksByIntent(userText);
+  if (!data) return null;
 
-  if (result.type === "ios") {
-    return `Claro 😊\n\nAqui está o link oficial para iPhone/iOS:\n${result.urls[0]}`;
+  const {
+    iosPassenger,
+    androidPassenger,
+    androidDriver,
+    wantsIOS,
+    wantsAndroid,
+    wantsMotorista,
+    wantsPassageiro,
+    isConfused
+  } = data;
+
+  if (isConfused) {
+    let msg = `Claro 😊\n\nFunciona assim:\n\n`;
+    msg += `• Se você é *passageiro no iPhone/iOS*, use este link:\n${iosPassenger || "(não encontrado)"}\n\n`;
+    msg += `• Se você é *passageiro no Android*, use este link:\n${androidPassenger || "(não encontrado)"}\n\n`;
+    msg += `• Se você é *motorista no Android*, use este link:\n${androidDriver || "(não encontrado)"}`;
+
+    return msg.trim();
   }
 
-  if (result.type === "android") {
-    return `Claro 😊\n\nAqui está o link oficial para Android:\n${result.urls[0]}`;
+  if (wantsMotorista) {
+    if (androidDriver) {
+      return `Claro 😊\n\nSe você é *motorista*, o link correto é este:\n${androidDriver}`;
+    }
+
+    return `Claro 😊\n\nNo momento eu não encontrei aqui o link de motorista.`;
   }
 
-  if (result.type === "motorista") {
-    return `Claro 😊\n\nAqui está o link oficial do app para motorista:\n${result.urls[0]}`;
+  if (wantsPassageiro && wantsIOS) {
+    if (iosPassenger) {
+      return `Claro 😊\n\nSe você é *passageiro no iPhone/iOS*, o link correto é este:\n${iosPassenger}`;
+    }
   }
 
-  if (result.type === "passageiro") {
-    let msg = `Claro 😊\n\nAqui estão os links oficiais para passageiro:\n`;
+  if (wantsPassageiro && wantsAndroid) {
+    if (androidPassenger) {
+      return `Claro 😊\n\nSe você é *passageiro no Android*, o link correto é este:\n${androidPassenger}`;
+    }
+  }
 
-    if (result.urls[0]) msg += `\n${result.urls[0]}`;
-    if (result.urls[1] && result.urls[1] !== result.urls[0]) {
-      msg += `\n\n${result.urls[1]}`;
+  if (wantsIOS) {
+    if (iosPassenger) {
+      return `Claro 😊\n\nPara *iPhone/iOS*, o link correto é este:\n${iosPassenger}`;
+    }
+  }
+
+  if (wantsAndroid) {
+    let msg = `Claro 😊\n\nNo Android existem duas opções:\n\n`;
+
+    if (androidPassenger) {
+      msg += `• *Passageiro*:\n${androidPassenger}\n\n`;
+    }
+
+    if (androidDriver) {
+      msg += `• *Motorista*:\n${androidDriver}`;
     }
 
     return msg.trim();
   }
 
-  let msg = `Claro 😊\n\nAqui estão os links oficiais do Busca Aí:\n`;
-  for (const url of result.urls.slice(0, 3)) {
-    msg += `\n${url}`;
+  if (wantsPassageiro) {
+    let msg = `Claro 😊\n\nSe você é *passageiro*, use:\n\n`;
+
+    if (iosPassenger) {
+      msg += `• *iPhone/iOS*:\n${iosPassenger}\n\n`;
+    }
+
+    if (androidPassenger) {
+      msg += `• *Android*:\n${androidPassenger}`;
+    }
+
+    return msg.trim();
   }
+
+  let msg = `Claro 😊\n\nAqui estão os links oficiais do Busca Aí:\n\n`;
+
+  if (iosPassenger) {
+    msg += `• *Passageiro iPhone/iOS*:\n${iosPassenger}\n\n`;
+  }
+
+  if (androidPassenger) {
+    msg += `• *Passageiro Android*:\n${androidPassenger}\n\n`;
+  }
+
+  if (androidDriver) {
+    msg += `• *Motorista Android*:\n${androidDriver}`;
+  }
+
   return msg.trim();
-}
+}}
 
 async function detectUserIntent(clientKey, session, userText) {
   const rules = getClientRules(clientKey);

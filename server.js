@@ -7,6 +7,9 @@ import { createClient } from "@supabase/supabase-js";
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
+/* =========================================================
+   ENV
+========================================================= */
 const PORT = process.env.PORT || 8080;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -36,36 +39,37 @@ const supabase =
     ? createClient(SUPABASE_URL, SUPABASE_KEY)
     : null;
 
+/* =========================================================
+   CLIENT RULES
+========================================================= */
 const CLIENT_RULES = {
   trivia: {
     assistantName: "MEL",
     companyName: "TRÍVIA",
     knowledgeDir: path.join(process.cwd(), "knowledge", "trivia"),
     commercialPhone: COMMERCIAL_PHONE_TRIVIA,
-    allowHandoff: true,
-    exactDataFileHints: {
-      links: ["link", "links", "download", "app", "aplicativo"],
-      commercial: ["comercial", "vendedor", "planos", "plano", "preço", "preco"]
-    }
+    allowHandoff: true
   },
   cliente_buscai: {
     assistantName: "Beatrice",
     companyName: "Busca Aí",
     knowledgeDir: path.join(process.cwd(), "knowledge", "cliente_buscai"),
     commercialPhone: COMMERCIAL_PHONE_BUSCAI,
-    allowHandoff: false,
-    exactDataFileHints: {
-      links: ["link", "links", "download", "app", "aplicativo", "ios", "iphone", "android"],
-      commercial: []
-    }
+    allowHandoff: false
   }
 };
 
+/* =========================================================
+   CACHE / STATE
+========================================================= */
 let COMPANIES_CACHE = [];
 const KNOWLEDGE_CACHE = new Map();
 const RAW_FILE_CACHE = new Map();
 const sessions = new Map();
 
+/* =========================================================
+   UTILS
+========================================================= */
 function normalizePhone(raw) {
   if (!raw) return "";
   return String(raw).replace(/[^\d]/g, "");
@@ -99,8 +103,8 @@ function normalizeCompanyKey(key) {
 }
 
 function getClientRules(clientKey) {
-  const normalizedKey = normalizeCompanyKey(clientKey);
-  return CLIENT_RULES[normalizedKey] || CLIENT_RULES.trivia;
+  const normalized = normalizeCompanyKey(clientKey);
+  return CLIENT_RULES[normalized] || CLIENT_RULES.trivia;
 }
 
 function assertEnv() {
@@ -135,6 +139,9 @@ function assertEnv() {
   console.log("OPENAI_MODEL:", OPENAI_MODEL);
 }
 
+/* =========================================================
+   COMPANIES / SUPABASE
+========================================================= */
 function getLegacyCompanies() {
   const companies = [];
 
@@ -220,10 +227,9 @@ function getCompanyByKey(clientKey) {
   return COMPANIES_CACHE.find((c) => c.key === normalized) || null;
 }
 
-function graphMessagesUrl(phoneNumberId) {
-  return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
-}
-
+/* =========================================================
+   KNOWLEDGE
+========================================================= */
 function listTxtFilesFlat(dir) {
   try {
     if (!fs.existsSync(dir)) return [];
@@ -286,6 +292,9 @@ function getRawFiles(clientKey) {
   return RAW_FILE_CACHE.get(normalized) || [];
 }
 
+/* =========================================================
+   SESSION
+========================================================= */
 function getSession(clientKey, userId) {
   const normalized = normalizeCompanyKey(clientKey);
   const id = `${normalized}:${userId}`;
@@ -306,6 +315,9 @@ function pushHistory(session, role, text) {
   if (session.history.length > 40) session.history.shift();
 }
 
+/* =========================================================
+   LEAD / COMMERCIAL
+========================================================= */
 function isCommercialNumber(clientKey, from) {
   const rules = getClientRules(clientKey);
   const commercialPhone = normalizePhone(rules.commercialPhone || "");
@@ -387,6 +399,13 @@ async function notifyCommercialLead(clientKey, from, session) {
   }
 }
 
+/* =========================================================
+   WHATSAPP
+========================================================= */
+function graphMessagesUrl(phoneNumberId) {
+  return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
+}
+
 async function sendWhatsAppText(clientKey, to, body) {
   const company = getCompanyByKey(clientKey);
 
@@ -412,6 +431,9 @@ async function sendWhatsAppText(clientKey, to, body) {
   return res.data;
 }
 
+/* =========================================================
+   PROTECTED LINKS - BUSCA AI
+========================================================= */
 function extractUrls(text) {
   const matches = text.match(/https?:\/\/[^\s)]+/g);
   return matches || [];
@@ -437,50 +459,21 @@ function looksLikeDownloadIntent(text) {
 
   if (strongSignals.some((s) => t.includes(s))) return true;
 
-  if ((t.includes("iphone") || t.includes("ios")) && (t.includes("link") || t.includes("baixar") || t.includes("app"))) {
+  if (
+    (t.includes("iphone") || t.includes("ios")) &&
+    (t.includes("link") || t.includes("baixar") || t.includes("app"))
+  ) {
     return true;
   }
 
-  if (t.includes("android") && (t.includes("link") || t.includes("baixar") || t.includes("app"))) {
+  if (
+    t.includes("android") &&
+    (t.includes("link") || t.includes("baixar") || t.includes("app"))
+  ) {
     return true;
   }
 
   return false;
-}
-
-function selectBuscaAiLinksByIntent(userText) {
-  const t = (userText || "").toLowerCase();
-  const files = getRawFiles("cliente_buscai");
-  const joined = files.map((f) => `\n${f.file}\n${f.content}\n`).join("\n");
-  const urls = [...new Set(extractUrls(joined))];
-
-  if (!urls.length) return null;
-
-  const iosUrls = urls.filter((u) => u.includes("apple.com"));
-  const androidUrls = urls.filter((u) => u.includes("play.google.com"));
-
-  const wantsIOS = t.includes("ios") || t.includes("iphone");
-  const wantsAndroid = t.includes("android");
-  const wantsMotorista = t.includes("motorista");
-  const wantsPassageiro = t.includes("passageiro");
-
-  if (wantsIOS && iosUrls.length) {
-    return { type: "ios", urls: iosUrls };
-  }
-
-  if (wantsMotorista && androidUrls.length) {
-    return { type: "motorista", urls: androidUrls };
-  }
-
-  if (wantsAndroid && androidUrls.length) {
-    return { type: "android", urls: androidUrls };
-  }
-
-  if (wantsPassageiro) {
-    return { type: "passageiro", urls: [...iosUrls, ...androidUrls] };
-  }
-
-  return { type: "geral", urls: [...iosUrls, ...androidUrls, ...urls] };
 }
 
 function selectBuscaAiLinksByIntent(userText) {
@@ -505,7 +498,9 @@ function selectBuscaAiLinksByIntent(userText) {
     t.includes("qual") ||
     t.includes("qual devo") ||
     t.includes("qual é o certo") ||
+    t.includes("qual e o certo") ||
     t.includes("que confusão") ||
+    t.includes("que confusao") ||
     t.includes("qual baixar");
 
   return {
@@ -540,7 +535,6 @@ function buildBuscaAiProtectedReply(userText) {
     msg += `• Se você é *passageiro no iPhone/iOS*, use este link:\n${iosPassenger || "(não encontrado)"}\n\n`;
     msg += `• Se você é *passageiro no Android*, use este link:\n${androidPassenger || "(não encontrado)"}\n\n`;
     msg += `• Se você é *motorista no Android*, use este link:\n${androidDriver || "(não encontrado)"}`;
-
     return msg.trim();
   }
 
@@ -548,26 +542,19 @@ function buildBuscaAiProtectedReply(userText) {
     if (androidDriver) {
       return `Claro 😊\n\nSe você é *motorista*, o link correto é este:\n${androidDriver}`;
     }
-
     return `Claro 😊\n\nNo momento eu não encontrei aqui o link de motorista.`;
   }
 
-  if (wantsPassageiro && wantsIOS) {
-    if (iosPassenger) {
-      return `Claro 😊\n\nSe você é *passageiro no iPhone/iOS*, o link correto é este:\n${iosPassenger}`;
-    }
+  if (wantsPassageiro && wantsIOS && iosPassenger) {
+    return `Claro 😊\n\nSe você é *passageiro no iPhone/iOS*, o link correto é este:\n${iosPassenger}`;
   }
 
-  if (wantsPassageiro && wantsAndroid) {
-    if (androidPassenger) {
-      return `Claro 😊\n\nSe você é *passageiro no Android*, o link correto é este:\n${androidPassenger}`;
-    }
+  if (wantsPassageiro && wantsAndroid && androidPassenger) {
+    return `Claro 😊\n\nSe você é *passageiro no Android*, o link correto é este:\n${androidPassenger}`;
   }
 
-  if (wantsIOS) {
-    if (iosPassenger) {
-      return `Claro 😊\n\nPara *iPhone/iOS*, o link correto é este:\n${iosPassenger}`;
-    }
+  if (wantsIOS && iosPassenger) {
+    return `Claro 😊\n\nPara *iPhone/iOS*, o link correto é este:\n${iosPassenger}`;
   }
 
   if (wantsAndroid) {
@@ -613,8 +600,11 @@ function buildBuscaAiProtectedReply(userText) {
   }
 
   return msg.trim();
-}}
+}
 
+/* =========================================================
+   INTENT DETECTION
+========================================================= */
 async function detectUserIntent(clientKey, session, userText) {
   const rules = getClientRules(clientKey);
 
@@ -629,7 +619,7 @@ Formato:
 {
   "intent": "beneficios|download_app|comercial|informacao|suporte|outro",
   "topic": "string curta",
-  "needs_exact_data": true ou false
+  "needs_exact_data": true
 }
 
 Regras:
@@ -694,6 +684,9 @@ Regras:
   }
 }
 
+/* =========================================================
+   RETRIEVAL
+========================================================= */
 function scoreTextForIntent(text, intentData, userText) {
   const base = (text || "").toLowerCase();
   const question = (userText || "").toLowerCase();
@@ -706,229 +699,3 @@ function scoreTextForIntent(text, intentData, userText) {
 
   for (const token of tokens) {
     if (base.includes(token)) score += 1;
-  }
-
-  const intent = intentData.intent || "";
-  const topic = (intentData.topic || "").toLowerCase();
-
-  if (topic && base.includes(topic)) score += 4;
-
-  if (intent === "download_app") {
-    if (base.includes("link")) score += 4;
-    if (base.includes("download")) score += 4;
-    if (base.includes("android")) score += 3;
-    if (base.includes("ios")) score += 3;
-    if (base.includes("iphone")) score += 3;
-    if (base.includes("play.google")) score += 3;
-    if (base.includes("apple.com")) score += 3;
-  }
-
-  if (intent === "beneficios") {
-    if (base.includes("vantagens")) score += 4;
-    if (base.includes("benefícios")) score += 4;
-    if (base.includes("beneficios")) score += 4;
-    if (base.includes("passageiro")) score += 3;
-    if (base.includes("motorista")) score += 3;
-  }
-
-  if (intent === "comercial") {
-    if (base.includes("plano")) score += 4;
-    if (base.includes("preço")) score += 4;
-    if (base.includes("preco")) score += 4;
-    if (base.includes("valores")) score += 4;
-    if (base.includes("comercial")) score += 4;
-  }
-
-  return score;
-}
-
-function retrieveRelevantKnowledge(clientKey, intentData, userText) {
-  const files = getRawFiles(clientKey);
-
-  if (!files.length) return "";
-
-  const ranked = files
-    .map((f) => ({
-      file: f.file,
-      content: f.content,
-      score: scoreTextForIntent(`${f.file}\n${f.content}`, intentData, userText)
-    }))
-    .sort((a, b) => b.score - a.score);
-
-  const selected = ranked.slice(0, 3);
-
-  return selected
-    .map(
-      (f) =>
-        `\n\n====================\nARQUIVO: ${f.file}\n====================\n${f.content}\n`
-    )
-    .join("\n");
-}
-
-async function generateAssistantReply(clientKey, session, userText, intentData, retrievedKnowledge) {
-  const rules = getClientRules(clientKey);
-
-  const system = `
-Você é ${rules.assistantName}, atendente oficial da ${rules.companyName} no WhatsApp.
-
-REGRAS ABSOLUTAS:
-- Você atende exclusivamente a ${rules.companyName}.
-- Nunca use informações, links, contatos, regras, planos ou posicionamentos de outra marca.
-- Baseie sua resposta prioritariamente nos TRECHOS RECUPERADOS abaixo.
-- Se os trechos não trouxerem a resposta com segurança, diga isso de forma natural e peça mais detalhes.
-- Nunca invente link, telefone, preço, plano ou contato.
-- Nunca fale de código, API, token, servidor, banco de dados ou arquivos internos.
-- Nunca mencione TXT, base de conhecimento ou documentos internos.
-- Respostas curtas em blocos.
-- No máximo 1 pergunta por mensagem.
-- Linguagem natural de WhatsApp.
-
-INTENÇÃO DETECTADA:
-${JSON.stringify(intentData)}
-
-TRECHOS RECUPERADOS:
-${retrievedKnowledge || "(sem trechos relevantes)"}
-`.trim();
-
-  const messages = [
-    { role: "system", content: system },
-    ...session.history.slice(-10).map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text
-    })),
-    { role: "user", content: userText }
-  ];
-
-  try {
-    const res = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: OPENAI_MODEL,
-        messages,
-        temperature: 0.25,
-        max_tokens: 260
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 25000
-      }
-    );
-
-    return (
-      res.data?.choices?.[0]?.message?.content?.trim() ||
-      "Entendi 😊 Me explica rapidinho o que você precisa."
-    );
-  } catch (err) {
-    console.error("OpenAI reply error:", err?.response?.status, err?.response?.data || err.message);
-    return "Entendi 😊 Me explica rapidinho o que você precisa.";
-  }
-}
-
-app.get("/", (req, res) => {
-  res.status(200).send("OK");
-});
-
-app.get("/webhook", (req, res) => {
-  try {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
-
-    if (mode && token && mode === "subscribe" && token === VERIFY_TOKEN) {
-      return res.status(200).send(challenge);
-    }
-
-    return res.sendStatus(403);
-  } catch {
-    return res.sendStatus(403);
-  }
-});
-
-app.post("/webhook", async (req, res) => {
-  res.sendStatus(200);
-
-  try {
-    const entry = req.body?.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const msg = value?.messages?.[0];
-
-    if (!msg) return;
-
-    const from = msg.from;
-    const text = msg?.text?.body || "";
-    if (!from || !text) return;
-
-    const incomingPhoneNumberId = value?.metadata?.phone_number_id;
-    const company = getCompanyByPhoneNumberId(incomingPhoneNumberId);
-
-    if (!company) {
-      console.log(`Empresa não encontrada para phone_number_id=${incomingPhoneNumberId}`);
-      return;
-    }
-
-    const clientKey = company.key;
-
-    console.log(
-      `Incoming msg | client=${clientKey} | phone_number_id=${incomingPhoneNumberId} | from=${from}`
-    );
-
-    if (isCommercialNumber(clientKey, from)) return;
-
-    const session = getSession(clientKey, from);
-    pushHistory(session, "user", text);
-    extractLeadFields(session, text);
-
-    const intentData = await detectUserIntent(clientKey, session, text);
-
-    if (intentData.intent === "comercial" && getClientRules(clientKey).allowHandoff) {
-      const contact = formatCommercialContact(clientKey);
-      await sendWhatsAppText(clientKey, from, contact);
-      pushHistory(session, "assistant", contact);
-      await notifyCommercialLead(clientKey, from, session);
-      return;
-    }
-
-    if (clientKey === "cliente_buscai" && intentData.intent === "download_app") {
-      const protectedReply = buildBuscaAiProtectedReply(text);
-
-      if (protectedReply) {
-        await sendWhatsAppText(clientKey, from, protectedReply);
-        pushHistory(session, "assistant", protectedReply);
-        return;
-      }
-    }
-
-    const retrievedKnowledge = retrieveRelevantKnowledge(clientKey, intentData, text);
-    const reply = await generateAssistantReply(
-      clientKey,
-      session,
-      text,
-      intentData,
-      retrievedKnowledge
-    );
-
-    await sendWhatsAppText(clientKey, from, reply);
-    pushHistory(session, "assistant", reply);
-  } catch (err) {
-    console.error(
-      "Webhook handler error:",
-      err?.response?.status,
-      err?.response?.data || err.message
-    );
-  }
-});
-
-async function startServer() {
-  assertEnv();
-  await refreshCompaniesCache();
-
-  app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-  });
-}
-
-startServer();

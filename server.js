@@ -46,6 +46,10 @@ function normalizePhone(raw) {
   return String(raw).replace(/[^\d]/g, "");
 }
 
+function safeTrim(v) {
+  return String(v || "").trim();
+}
+
 function mask(v) {
   if (!v) return "";
   const s = String(v);
@@ -75,8 +79,8 @@ function getLegacyCompanies() {
       id: "legacy_trivia",
       name: "TRIVIA TECNOLOGIA",
       key: "trivia_tecnologia",
-      phoneNumberId: String(PHONE_NUMBER_ID),
-      token: WHATSAPP_TOKEN,
+      phoneNumberId: safeTrim(PHONE_NUMBER_ID),
+      token: safeTrim(WHATSAPP_TOKEN),
       segment: "tecnologia",
       source: "legacy",
     });
@@ -87,8 +91,8 @@ function getLegacyCompanies() {
       id: "legacy_buscai",
       name: "BUSCA AI",
       key: "busca_ai",
-      phoneNumberId: String(PHONE_NUMBER_ID_BUSCAI),
-      token: WHATSAPP_TOKEN_BUSCAI,
+      phoneNumberId: safeTrim(PHONE_NUMBER_ID_BUSCAI),
+      token: safeTrim(WHATSAPP_TOKEN_BUSCAI),
       segment: "mobilidade",
       source: "legacy",
     });
@@ -111,20 +115,38 @@ async function loadCompaniesFromSupabase() {
       return [];
     }
 
-    const companies = (data || [])
-      .map((row) => ({
-        id: row.id,
-        name: row.name || "",
-        key: makeCompanyKey(row.name || `company_${row.id}`),
-        phoneNumberId: String(row.phone_number_id || ""),
-        token: row.whatsapp_token || "",
-        segment: row.segment || "",
-        source: "supabase",
-      }))
-      .filter((c) => c.phoneNumberId && c.token);
+    console.log(`📦 Linhas brutas do Supabase: ${(data || []).length}`);
 
-    console.log(`✅ Empresas carregadas do Supabase: ${companies.length}`);
-    return companies;
+    const mapped = (data || []).map((row) => ({
+      id: row.id,
+      name: safeTrim(row.name),
+      key: makeCompanyKey(safeTrim(row.name) || `company_${row.id}`),
+      phoneNumberId: safeTrim(row.phone_number_id),
+      token: safeTrim(row.whatsapp_token),
+      segment: safeTrim(row.segment),
+      source: "supabase",
+    }));
+
+    console.log(
+      "📦 Empresas mapeadas:",
+      JSON.stringify(
+        mapped.map((c) => ({
+          id: c.id,
+          name: c.name,
+          key: c.key,
+          phoneNumberId: c.phoneNumberId,
+          tokenPresent: !!c.token,
+          segment: c.segment,
+          source: c.source,
+        }))
+      )
+    );
+
+    const validCompanies = mapped.filter((c) => c.phoneNumberId && c.token);
+
+    console.log(`✅ Empresas válidas do Supabase: ${validCompanies.length}`);
+
+    return validCompanies;
   } catch (err) {
     console.error("❌ Falha inesperada ao carregar companies:", err.message);
     return [];
@@ -134,8 +156,9 @@ async function loadCompaniesFromSupabase() {
 async function refreshCompaniesCache() {
   const dbCompanies = await loadCompaniesFromSupabase();
 
-  if (dbCompanies.length) {
+  if (dbCompanies.length > 0) {
     COMPANIES_CACHE = dbCompanies;
+    console.log(`✅ Cache carregado pelo Supabase: ${COMPANIES_CACHE.length} empresa(s).`);
     return;
   }
 
@@ -146,9 +169,12 @@ async function refreshCompaniesCache() {
 
 function getCompanyByPhoneNumberId(phoneNumberId) {
   if (!phoneNumberId) return null;
+
+  const normalized = safeTrim(phoneNumberId);
+
   return (
     COMPANIES_CACHE.find(
-      (c) => String(c.phoneNumberId) === String(phoneNumberId)
+      (c) => safeTrim(c.phoneNumberId) === normalized
     ) || null
   );
 }
@@ -205,9 +231,7 @@ function loadKnowledgeForClient(clientKey) {
   );
 
   if (!unique.length) {
-    console.log(
-      `ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas.`
-    );
+    console.log(`ℹ️ [${clientKey}] Nenhum .txt encontrado nas pastas configuradas.`);
     return "";
   }
 
@@ -220,9 +244,7 @@ function loadKnowledgeForClient(clientKey) {
     );
   }
 
-  console.log(
-    `✅ [${clientKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`
-  );
+  console.log(`✅ [${clientKey}] Knowledge carregado: ${unique.length} arquivo(s) .txt`);
   return parts.join("\n");
 }
 
@@ -310,9 +332,8 @@ function getClientConfig(clientKey) {
   }
 
   if (!company.phoneNumberId || !company.token) {
-    console.log(
-      `❌ Config incompleta para ${clientKey}. phoneNumberId/token ausentes.`
-    );
+    console.log(`❌ Config incompleta para ${clientKey}. phoneNumberId/token ausentes.`);
+    return null;
   }
 
   return company;
@@ -638,4 +659,10 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer();   Confira linha por linha e me devolva completo certo 
+Respeite exatamente a estrutura atual que já está funcionando, mas corrija apenas o necessário para o Supabase passar a carregar as 2 empresas da tabela companies.
+Não simplifique o sistema.
+Não remova fallback legado.
+Não altere a lógica de atendimento.
+Só corrija o que está impedindo o carregamento do Supabase.
+Se houver qualquer ponto duvidoso, destaque claramente antes do código.

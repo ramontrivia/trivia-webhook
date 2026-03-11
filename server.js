@@ -8,23 +8,29 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 const PORT = process.env.PORT || 8080;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY =
-  process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0";
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const COMMERCIAL_PHONE = normalizePhone(process.env.COMMERCIAL_PHONE || "");
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY =
+  process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 
 const PHONE_NUMBER_ID_BUSCAI = process.env.PHONE_NUMBER_ID_BUSCAI;
 const WHATSAPP_TOKEN_BUSCAI = process.env.WHATSAPP_TOKEN_BUSCAI;
+
+const COMMERCIAL_PHONE_TRIVIA = normalizePhone(
+  process.env.COMMERCIAL_PHONE || ""
+);
+
+const COMMERCIAL_PHONE_BUSCAI = normalizePhone(
+  process.env.COMMERCIAL_PHONE_BUSCAI || ""
+);
 
 const supabase =
   SUPABASE_URL && SUPABASE_KEY
@@ -38,13 +44,6 @@ function normalizePhone(raw) {
 
 function safeTrim(v) {
   return String(v || "").trim();
-}
-
-function mask(v) {
-  if (!v) return "";
-  const s = String(v);
-  if (s.length <= 6) return "***";
-  return `${s.slice(0, 3)}***${s.slice(-3)}`;
 }
 
 function makeCompanyKey(name) {
@@ -63,9 +62,91 @@ function normalizeCompanyKey(key) {
   return k;
 }
 
+function mask(v) {
+  if (!v) return "";
+  const s = String(v);
+  if (s.length <= 6) return "***";
+  return `${s.slice(0, 3)}***${s.slice(-3)}`;
+}
+
+const CLIENT_RULES = {
+  trivia: {
+    assistantName: "MEL",
+    companyName: "TRÍVIA",
+    knowledgeDir: "trivia",
+    commercialPhone: COMMERCIAL_PHONE_TRIVIA,
+    allowHandoff: true,
+    handoffKeywords: [
+      "contratar",
+      "quero contratar",
+      "preço",
+      "preco",
+      "valores",
+      "plano",
+      "planos",
+      "assinar",
+      "comercial",
+      "falar com comercial",
+      "quero falar com comercial",
+      "quero falar com vendedor",
+      "vendedor",
+      "atendente humano",
+      "quero comprar",
+      "quero fechar",
+      "vou querer",
+      "quero fechar agora",
+    ],
+  },
+  cliente_buscai: {
+    assistantName: "Beatrice",
+    companyName: "Busca Aí",
+    knowledgeDir: "cliente_buscai",
+    commercialPhone: COMMERCIAL_PHONE_BUSCAI,
+    allowHandoff: false,
+    handoffKeywords: [],
+  },
+};
+
 let COMPANIES_CACHE = [];
 const KNOWLEDGE_CACHE = new Map();
 const sessions = new Map();
+
+function assertEnv() {
+  const missing = [];
+
+  if (!VERIFY_TOKEN) missing.push("VERIFY_TOKEN");
+  if (!OPENAI_API_KEY) missing.push("OPENAI_API_KEY");
+
+  if (!PHONE_NUMBER_ID && !(SUPABASE_URL && SUPABASE_KEY)) {
+    missing.push("PHONE_NUMBER_ID ou SUPABASE");
+  }
+
+  if (!WHATSAPP_TOKEN && !(SUPABASE_URL && SUPABASE_KEY)) {
+    missing.push("WHATSAPP_TOKEN ou SUPABASE");
+  }
+
+  if (missing.length) {
+    console.error("Variáveis ausentes:", missing.join(", "));
+  } else {
+    console.log("ENV OK");
+  }
+
+  console.log("PORT:", PORT);
+  console.log("GRAPH_VERSION:", GRAPH_VERSION);
+  console.log("SUPABASE_URL:", SUPABASE_URL || "(não configurado)");
+  console.log("SUPABASE_KEY:", mask(SUPABASE_KEY));
+  console.log("PHONE_NUMBER_ID:", mask(PHONE_NUMBER_ID));
+  console.log("PHONE_NUMBER_ID_BUSCAI:", mask(PHONE_NUMBER_ID_BUSCAI));
+  console.log("COMMERCIAL_PHONE_TRIVIA:", COMMERCIAL_PHONE_TRIVIA || "(vazio)");
+  console.log("COMMERCIAL_PHONE_BUSCAI:", COMMERCIAL_PHONE_BUSCAI || "(vazio)");
+  console.log("OPENAI_API_KEY:", mask(OPENAI_API_KEY));
+  console.log("OPENAI_MODEL:", OPENAI_MODEL);
+}
+
+function getClientRules(clientKey) {
+  const normalizedKey = normalizeCompanyKey(clientKey);
+  return CLIENT_RULES[normalizedKey] || CLIENT_RULES.trivia;
+}
 
 function getLegacyCompanies() {
   const companies = [];
@@ -77,8 +158,6 @@ function getLegacyCompanies() {
       key: "trivia",
       phoneNumberId: safeTrim(PHONE_NUMBER_ID),
       token: safeTrim(WHATSAPP_TOKEN),
-      segment: "tecnologia",
-      source: "legacy",
     });
   }
 
@@ -89,8 +168,6 @@ function getLegacyCompanies() {
       key: "cliente_buscai",
       phoneNumberId: safeTrim(PHONE_NUMBER_ID_BUSCAI),
       token: safeTrim(WHATSAPP_TOKEN_BUSCAI),
-      segment: "mobilidade",
-      source: "legacy",
     });
   }
 
@@ -98,54 +175,33 @@ function getLegacyCompanies() {
 }
 
 async function loadCompaniesFromSupabase() {
-  if (!supabase) {
-    console.log("Supabase nao configurado. Usando fallback legado.");
-    return [];
-  }
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase.from("companies").select("*");
 
     if (error) {
-      console.error("Erro ao carregar companies do Supabase:", error.message);
+      console.error("Erro ao carregar companies:", error.message);
       return [];
     }
 
-    console.log(`Linhas brutas do Supabase: ${(data || []).length}`);
+    const mapped = (data || [])
+      .map((row) => {
+        const rawKey = makeCompanyKey(safeTrim(row.name) || `company_${row.id}`);
+        const fixedKey = normalizeCompanyKey(rawKey);
 
-    const mapped = (data || []).map((row) => {
-      const rawKey = makeCompanyKey(safeTrim(row.name) || `company_${row.id}`);
-      const fixedKey = normalizeCompanyKey(rawKey);
+        return {
+          id: row.id,
+          name: safeTrim(row.name),
+          key: fixedKey,
+          phoneNumberId: safeTrim(row.phone_number_id),
+          token: safeTrim(row.whatsapp_token),
+        };
+      })
+      .filter((c) => c.phoneNumberId && c.token);
 
-      return {
-        id: row.id,
-        name: safeTrim(row.name),
-        key: fixedKey,
-        phoneNumberId: safeTrim(row.phone_number_id),
-        token: safeTrim(row.whatsapp_token),
-        segment: safeTrim(row.segment),
-        source: "supabase",
-      };
-    });
-
-    console.log(
-      "Empresas mapeadas:",
-      JSON.stringify(
-        mapped.map((c) => ({
-          id: c.id,
-          name: c.name,
-          key: c.key,
-          phoneNumberId: c.phoneNumberId,
-          tokenPresent: !!c.token,
-          segment: c.segment,
-        }))
-      )
-    );
-
-    const validCompanies = mapped.filter((c) => c.phoneNumberId && c.token);
-
-    console.log(`Empresas validas do Supabase: ${validCompanies.length}`);
-    return validCompanies;
+    console.log(`Empresas carregadas do Supabase: ${mapped.length}`);
+    return mapped;
   } catch (err) {
     console.error("Falha inesperada ao carregar companies:", err.message);
     return [];
@@ -157,32 +213,24 @@ async function refreshCompaniesCache() {
 
   if (dbCompanies.length > 0) {
     COMPANIES_CACHE = dbCompanies;
-    console.log(`Cache carregado pelo Supabase: ${COMPANIES_CACHE.length} empresa(s).`);
+    console.log(`Cache carregado pelo Supabase: ${COMPANIES_CACHE.length}`);
     return;
   }
 
-  const legacy = getLegacyCompanies();
-  COMPANIES_CACHE = legacy;
-  console.log(`Usando fallback legado: ${legacy.length} empresa(s).`);
+  COMPANIES_CACHE = getLegacyCompanies();
+  console.log(`Usando fallback legado: ${COMPANIES_CACHE.length}`);
 }
 
 function getCompanyByPhoneNumberId(phoneNumberId) {
-  if (!phoneNumberId) return null;
   const normalized = safeTrim(phoneNumberId);
-
   return (
     COMPANIES_CACHE.find((c) => safeTrim(c.phoneNumberId) === normalized) || null
   );
 }
 
-function getCompanyByKey(companyKey) {
-  const normalizedKey = normalizeCompanyKey(companyKey);
+function getCompanyByKey(clientKey) {
+  const normalizedKey = normalizeCompanyKey(clientKey);
   return COMPANIES_CACHE.find((c) => c.key === normalizedKey) || null;
-}
-
-function detectClientByPhoneNumberId(phoneNumberId) {
-  const company = getCompanyByPhoneNumberId(phoneNumberId);
-  return company ? company.key : null;
 }
 
 function listTxtFilesFlat(dir) {
@@ -197,59 +245,33 @@ function listTxtFilesFlat(dir) {
   }
 }
 
-function getKnowledgeDirs(clientKey) {
-  const normalizedKey = normalizeCompanyKey(clientKey);
-
-  if (normalizedKey === "trivia") {
-    return [path.join(process.cwd(), "knowledge", "trivia")];
-  }
-
-  if (normalizedKey === "cliente_buscai") {
-    return [path.join(process.cwd(), "knowledge", "cliente_buscai")];
-  }
-
-  return [path.join(process.cwd(), "knowledge", normalizedKey)];
+function getKnowledgeDir(clientKey) {
+  const rules = getClientRules(clientKey);
+  return path.join(process.cwd(), "knowledge", rules.knowledgeDir);
 }
 
 function loadKnowledgeForClient(clientKey) {
   const normalizedKey = normalizeCompanyKey(clientKey);
-  const dirs = getKnowledgeDirs(normalizedKey);
-  const allFiles = [];
+  const dir = getKnowledgeDir(normalizedKey);
+  const files = listTxtFilesFlat(dir).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  for (const d of dirs) {
-    allFiles.push(...listTxtFilesFlat(d));
-  }
-
-  const unique = [...new Set(allFiles)].sort((a, b) =>
-    a.localeCompare(b, "pt-BR")
-  );
-
-  if (!unique.length) {
-    console.log(`[${normalizedKey}] Nenhum txt encontrado nas pastas configuradas.`);
+  if (!files.length) {
+    console.log(`[${normalizedKey}] Nenhum .txt encontrado em ${dir}`);
     return "";
   }
 
   const parts = [];
 
-  for (const full of unique) {
+  for (const full of files) {
     const file = path.basename(full);
     const content = fs.readFileSync(full, "utf8");
 
     parts.push(
-      [
-        "",
-        "",
-        "====================",
-        `CLIENTE: ${normalizedKey}`,
-        `ARQUIVO: ${file}`,
-        "====================",
-        content,
-        "",
-      ].join("\n")
+      `\n\n====================\nCLIENTE: ${normalizedKey}\nARQUIVO: ${file}\n====================\n${content}\n`
     );
   }
 
-  console.log(`[${normalizedKey}] Knowledge carregado: ${unique.length} arquivo(s) txt`);
+  console.log(`[${normalizedKey}] Knowledge carregado: ${files.length} arquivo(s)`);
   return parts.join("\n");
 }
 
@@ -262,40 +284,6 @@ function getKnowledge(clientKey) {
 
   return KNOWLEDGE_CACHE.get(normalizedKey) || "";
 }
-
-function assertEnv() {
-  const missing = [];
-
-  if (!VERIFY_TOKEN) missing.push("VERIFY_TOKEN");
-  if (!OPENAI_API_KEY) missing.push("OPENAI_API_KEY");
-  if (!COMMERCIAL_PHONE) missing.push("COMMERCIAL_PHONE");
-
-  if (!PHONE_NUMBER_ID && !(SUPABASE_URL && SUPABASE_KEY)) {
-    missing.push("PHONE_NUMBER_ID ou SUPABASE_URL/SUPABASE_KEY");
-  }
-
-  if (!WHATSAPP_TOKEN && !(SUPABASE_URL && SUPABASE_KEY)) {
-    missing.push("WHATSAPP_TOKEN ou SUPABASE_URL/SUPABASE_KEY");
-  }
-
-  if (missing.length) {
-    console.error("Variaveis ausentes:", missing.join(", "));
-  } else {
-    console.log("ENV OK");
-  }
-
-  console.log("PORT:", PORT);
-  console.log("GRAPH_VERSION:", GRAPH_VERSION);
-  console.log("SUPABASE_URL:", SUPABASE_URL || "(nao configurado)");
-  console.log("SUPABASE_KEY:", mask(SUPABASE_KEY));
-  console.log("PHONE_NUMBER_ID:", mask(PHONE_NUMBER_ID));
-  console.log("PHONE_NUMBER_ID_BUSCAI:", mask(PHONE_NUMBER_ID_BUSCAI));
-  console.log("COMMERCIAL_PHONE:", COMMERCIAL_PHONE);
-  console.log("OPENAI_API_KEY:", mask(OPENAI_API_KEY));
-  console.log("OPENAI_MODEL:", OPENAI_MODEL);
-}
-
-assertEnv();
 
 function getSession(clientKey, userId) {
   const normalizedKey = normalizeCompanyKey(clientKey);
@@ -322,77 +310,23 @@ function graphMessagesUrl(phoneNumberId) {
   return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
 }
 
-function getClientConfig(clientKey) {
-  const normalizedKey = normalizeCompanyKey(clientKey);
-  const company = getCompanyByKey(normalizedKey);
-
-  if (!company) {
-    console.log(`Empresa nao encontrada no cache: ${normalizedKey}`);
-    return null;
-  }
-
-  if (!company.phoneNumberId || !company.token) {
-    console.log(`Config incompleta para ${normalizedKey}.`);
-    return null;
-  }
-
-  return company;
+function isCommercialNumber(clientKey, from) {
+  const rules = getClientRules(clientKey);
+  const commercialPhone = normalizePhone(rules.commercialPhone || "");
+  return commercialPhone && normalizePhone(from) === commercialPhone;
 }
 
-async function sendWhatsAppText(clientKey, to, body) {
-  const cfg = getClientConfig(clientKey);
-
-  if (!cfg) {
-    throw new Error(`Configuracao nao encontrada para clientKey=${clientKey}`);
-  }
-
-  const payload = {
-    messaging_product: "whatsapp",
-    to,
-    type: "text",
-    text: { body },
-  };
-
-  const res = await axios.post(graphMessagesUrl(cfg.phoneNumberId), payload, {
-    headers: {
-      Authorization: `Bearer ${cfg.token}`,
-      "Content-Type": "application/json",
-    },
-    timeout: 20000,
-  });
-
-  return res.data;
-}
-
-function isCommercialNumber(from) {
-  return COMMERCIAL_PHONE && normalizePhone(from) === COMMERCIAL_PHONE;
-}
-
-const TRIGGER_HOT = [
-  "contratar",
-  "quero contratar",
-  "preco",
-  "preço",
-  "valores",
-  "plano",
-  "planos",
-  "assinar",
-  "comercial",
-  "falar com comercial",
-  "quero falar com comercial",
-  "quero falar com vendedor",
-  "vendedor",
-  "atendente humano",
-  "quero comprar",
-  "quero fechar",
-  "vou querer",
-  "quero fechar agora",
-];
-
-function detectIntent(text) {
+function detectIntent(clientKey, text) {
+  const rules = getClientRules(clientKey);
   const t = (text || "").toLowerCase().trim();
 
-  if (TRIGGER_HOT.some((k) => t.includes(k))) return "handoff";
+  if (
+    rules.allowHandoff &&
+    rules.handoffKeywords.some((k) => t.includes(k))
+  ) {
+    return "handoff";
+  }
+
   if (t.includes("agendamento")) return "agendamento";
 
   if (
@@ -403,7 +337,7 @@ function detectIntent(text) {
     return "pedidos";
   }
 
-  if (t.includes("relatorio") || t.includes("relatório")) {
+  if (t.includes("relatório") || t.includes("relatorio")) {
     return "relatorios";
   }
 
@@ -424,112 +358,119 @@ function extractLeadFields(session, userText) {
     session.lead.state = maybeUF;
   }
 
-  const low = t.toLowerCase();
-  const seg =
-    low.includes("salão") || low.includes("salao")
-      ? "Salao/Beleza"
-      : low.includes("barbearia")
-      ? "Barbearia"
-      : low.includes("clínica") || low.includes("clinica")
-      ? "Clinica"
-      : low.includes("restaurante") || low.includes("lanchonete")
-      ? "Alimentacao"
-      : low.includes("oficina")
-      ? "Oficina"
-      : session.lead.segment;
-
-  session.lead.segment = seg;
-
   if (!session.lead.company && t.includes(",")) {
     const first = t.split(",")[0].trim();
-    if (first.length >= 3 && first.length <= 60) session.lead.company = first;
+    if (first.length >= 3 && first.length <= 60) {
+      session.lead.company = first;
+    }
   }
 }
 
-function formatCommercialContact() {
-  const phonePretty = COMMERCIAL_PHONE
-    ? `+${COMMERCIAL_PHONE.slice(0, 2)} (${COMMERCIAL_PHONE.slice(2, 4)}) ${COMMERCIAL_PHONE.slice(4, 9)}-${COMMERCIAL_PHONE.slice(9)}`
-    : "";
+function formatCommercialContact(clientKey) {
+  const rules = getClientRules(clientKey);
+  const commercialPhone = normalizePhone(rules.commercialPhone || "");
 
-  return `Fechou 😊 Aqui esta o contato do nosso comercial:\n\n${phonePretty}\nhttps://wa.me/${COMMERCIAL_PHONE}\n\nPode chamar por la que eles te atendem agora.`;
+  if (!commercialPhone) {
+    return "Posso te ajudar por aqui 😊";
+  }
+
+  const phonePretty = `+${commercialPhone.slice(0, 2)} (${commercialPhone.slice(
+    2,
+    4
+  )}) ${commercialPhone.slice(4, 9)}-${commercialPhone.slice(9)}`;
+
+  return `Fechou 😊 Aqui está o contato do nosso comercial:\n\n${phonePretty}\nhttps://wa.me/${commercialPhone}\n\nPode chamar por lá que eles te atendem agora.`;
 }
 
 function buildLeadReport(clientKey, userId, session) {
+  const rules = getClientRules(clientKey);
   const { name, company, city, state, segment } = session.lead;
-
-  const personaName =
-    normalizeCompanyKey(clientKey) === "cliente_buscai" ? "Beatrice" : "MEL";
 
   const lastMsgs = session.history
     .slice(-12)
-    .map((m) => `${m.role === "user" ? "Cliente" : personaName}: ${m.text}`)
+    .map((m) => `${m.role === "user" ? "Cliente" : rules.assistantName}: ${m.text}`)
     .join("\n");
 
   const now = new Date().toLocaleString("pt-BR");
 
   return (
-    `Novo lead (${clientKey})\n` +
+    `Novo lead (${rules.companyName})\n` +
     `${now}\n` +
     `WhatsApp: ${userId}\n` +
-    `Nome: ${name || "(nao informado)"}\n` +
-    `Negocio: ${company || "(nao informado)"}\n` +
-    `Cidade/UF: ${city || "(nao informado)"}${state ? "/" + state : ""}\n` +
-    `Segmento: ${segment || "(nao identificado)"}\n\n` +
-    `Resumo:\n` +
-    `${lastMsgs}`
+    `Nome: ${name || "(não informado)"}\n` +
+    `Negócio: ${company || "(não informado)"}\n` +
+    `Cidade/UF: ${city || "(não informado)"}${state ? "/" + state : ""}\n` +
+    `Segmento: ${segment || "(não identificado)"}\n\n` +
+    `Resumo:\n${lastMsgs}`
   );
 }
 
 async function notifyCommercialLead(clientKey, from, session) {
-  if (session.leadNotified) return;
+  const rules = getClientRules(clientKey);
+  const commercialPhone = normalizePhone(rules.commercialPhone || "");
+
+  if (!rules.allowHandoff || !commercialPhone || session.leadNotified) return;
 
   const report = buildLeadReport(clientKey, from, session);
 
   try {
-    await sendWhatsAppText(clientKey, COMMERCIAL_PHONE, report);
+    await sendWhatsAppText(clientKey, commercialPhone, report);
     session.leadNotified = true;
     console.log(`[${clientKey}] Lead enviado ao comercial.`);
   } catch (e) {
-    console.error(`[${clientKey}] Falha ao enviar lead ao comercial:`, e?.response?.data || e.message);
+    console.error(`[${clientKey}] Falha ao enviar lead:`, e?.response?.data || e.message);
   }
 }
 
-async function generateAssistantReply(clientKey, session, userText) {
-  const normalizedKey = normalizeCompanyKey(clientKey);
-  const KNOWLEDGE_BASE = getKnowledge(normalizedKey);
+async function sendWhatsAppText(clientKey, to, body) {
+  const company = getCompanyByKey(clientKey);
 
-  const isBuscaAi = normalizedKey === "cliente_buscai";
-  const assistantName = isBuscaAi ? "Beatrice" : "MEL";
-  const companyName = isBuscaAi ? "Busca Ai" : "TRIVIA";
+  if (!company) {
+    throw new Error(`Empresa não encontrada para ${clientKey}`);
+  }
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body },
+  };
+
+  const res = await axios.post(graphMessagesUrl(company.phoneNumberId), payload, {
+    headers: {
+      Authorization: `Bearer ${company.token}`,
+      "Content-Type": "application/json",
+    },
+    timeout: 20000,
+  });
+
+  return res.data;
+}
+
+async function generateAssistantReply(clientKey, session, userText) {
+  const rules = getClientRules(clientKey);
+  const KNOWLEDGE_BASE = getKnowledge(clientKey);
 
   const system = `
-Voce e ${assistantName}, atendente oficial da ${companyName} no WhatsApp.
-
-PERSONA:
-- Humana, simpatica, clara, objetiva e prestativa.
-- Natural, sem parecer robo.
+Você é ${rules.assistantName}, atendente oficial da ${rules.companyName} no WhatsApp.
 
 REGRAS ABSOLUTAS:
-1. Suas respostas devem ser baseadas prioritariamente na BASE DE CONHECIMENTO abaixo.
-2. Voce esta atendendo exclusivamente a marca ${companyName}. Nunca fale como se fosse outra empresa.
-3. Nunca use informacoes, links, contatos, regras, nomes ou posicionamentos de outra marca.
-4. Se a informacao existir na base, voce deve usa-la.
-5. Voce nunca deve dizer que nao possui link, nao consegue fornecer link, ou que nao pode enviar link, se houver links na base.
-6. Se o usuario pedir baixar, download, instalar, app, aplicativo, cadastro, passageiro ou motorista, voce deve procurar essas informacoes na base e enviar os links oficiais que estiverem nela.
-7. Voce nunca deve inventar links, telefones, emails, regras ou instrucoes.
-8. Nunca fale de codigo, API, token, servidor, banco de dados ou arquivos internos.
-9. Nunca mencione que esta lendo arquivos, base, TXT ou documentos.
+1. Você atende exclusivamente a ${rules.companyName}.
+2. Nunca use informações, links, contatos, regras, planos ou posicionamentos de outra marca.
+3. Suas respostas devem ser baseadas prioritariamente na BASE DE CONHECIMENTO abaixo.
+4. Se houver links oficiais na base, você deve enviá-los.
+5. Nunca diga que não pode enviar links, se houver links na base.
+6. Nunca invente links, contatos, regras ou instruções.
+7. Nunca fale de código, API, token, servidor, banco de dados ou arquivos internos.
+8. Nunca mencione TXT, base de conhecimento ou documentos internos.
+9. Se o assunto for iPhone, iOS, Android, app, instalação ou download, responda normalmente sem acionar comercial.
+10. Só fale de comercial se o cliente pedir claramente contratar, preço, valores, vendedor ou plano e isso fizer sentido para a marca atual.
 
-COMPORTAMENTO:
+ESTILO:
+- Humana, simpática, clara e objetiva.
 - Respostas curtas em blocos.
-- Maximo de 1 pergunta por mensagem.
+- No máximo 1 pergunta por mensagem.
 - Linguagem natural de WhatsApp.
-
-INSTRUCAO ESPECIAL:
-- Se houver links oficiais na base, envie os links diretamente ao usuario, organizados de forma clara.
-- Voce esta autorizada a enviar links oficiais que estejam na base de conhecimento.
-- Se o usuario estiver falando de iPhone, iOS, Android, app, instalacao ou download, nao acione comercial automaticamente.
-- So acione comercial quando o assunto for claramente contratar, plano, preco, valores, vendedor ou fechar.
 
 BASE DE CONHECIMENTO:
 ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
@@ -550,7 +491,7 @@ ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
       {
         model: OPENAI_MODEL,
         messages,
-        temperature: 0.35,
+        temperature: 0.25,
         max_tokens: 320,
       },
       {
@@ -562,12 +503,13 @@ ${KNOWLEDGE_BASE ? KNOWLEDGE_BASE.slice(0, 12000) : "(sem base)"}
       }
     );
 
-    const out = res.data?.choices?.[0]?.message?.content?.trim();
-
-    return out || "Entendi. Me explica rapidinho o que voce precisa que eu te ajudo.";
+    return (
+      res.data?.choices?.[0]?.message?.content?.trim() ||
+      "Entendi 😊 Me explica rapidinho o que você precisa."
+    );
   } catch (err) {
     console.error("OpenAI error:", err?.response?.status, err?.response?.data || err.message);
-    return "Entendi. Me explica rapidinho o que voce precisa que eu te ajudo.";
+    return "Entendi 😊 Me explica rapidinho o que você precisa.";
   }
 }
 
@@ -608,36 +550,38 @@ app.post("/webhook", async (req, res) => {
     if (!from || !text) return;
 
     const incomingPhoneNumberId = value?.metadata?.phone_number_id;
-    const clientKey = detectClientByPhoneNumberId(incomingPhoneNumberId);
+    const company = getCompanyByPhoneNumberId(incomingPhoneNumberId);
 
-    if (!clientKey) {
-      console.log(`Empresa nao encontrada: ${incomingPhoneNumberId}`);
+    if (!company) {
+      console.log(`Empresa não encontrada: ${incomingPhoneNumberId}`);
       return;
     }
+
+    const clientKey = company.key;
 
     console.log(
       `Incoming msg | client=${clientKey} | phone_number_id=${incomingPhoneNumberId} | from=${from}`
     );
 
-    if (isCommercialNumber(from)) return;
+    if (isCommercialNumber(clientKey, from)) return;
 
     const session = getSession(clientKey, from);
     pushHistory(session, "user", text);
 
     extractLeadFields(session, text);
 
-    const intent = detectIntent(text);
+    const intent = detectIntent(clientKey, text);
     session.lastIntent = intent;
 
     if (intent === "handoff") {
-      const contact = formatCommercialContact();
+      const contact = formatCommercialContact(clientKey);
       await sendWhatsAppText(clientKey, from, contact);
       pushHistory(session, "assistant", contact);
 
       await notifyCommercialLead(clientKey, from, session);
 
       const confirm =
-        "Prontinho. Se voce me disser o nome do negocio + cidade, eu ja aviso o time com tudo mastigado pra te atender mais rapido.";
+        "Prontinho. Se você me disser o nome do negócio + cidade, eu já aviso o time com tudo mastigado pra te atender mais rápido.";
       await sendWhatsAppText(clientKey, from, confirm);
       pushHistory(session, "assistant", confirm);
       return;
@@ -647,20 +591,13 @@ app.post("/webhook", async (req, res) => {
     await sendWhatsAppText(clientKey, from, reply);
     pushHistory(session, "assistant", reply);
   } catch (err) {
-    console.error(
-      "Webhook handler error:",
-      err?.response?.status,
-      err?.response?.data || err.message
-    );
+    console.error("Webhook handler error:", err?.response?.status, err?.response?.data || err.message);
   }
 });
 
 async function startServer() {
+  assertEnv();
   await refreshCompaniesCache();
-
-  if (!COMPANIES_CACHE.length) {
-    console.log("Nenhuma empresa carregada no cache.");
-  }
 
   app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);

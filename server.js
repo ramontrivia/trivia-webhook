@@ -217,6 +217,100 @@ function pushHistory(session, role, content) {
 }
 
 /* =========================================================
+   DB LOGS / CONVERSATIONS
+========================================================= */
+async function insertMessageLog({
+  company,
+  clientKey,
+  userPhone,
+  direction,
+  message,
+  intent
+}) {
+  if (!supabase) return;
+
+  try {
+    const payload = {
+      company_id: company.id ?? null,
+      client_key: clientKey,
+      company_name: company.name || "",
+      user_phone: userPhone,
+      direction,
+      message,
+      intent: intent || null
+    };
+
+    const { error } = await supabase.from("messages").insert(payload);
+
+    if (error) {
+      console.error("Erro ao inserir em messages:", error.message);
+    }
+  } catch (err) {
+    console.error("Falha ao inserir em messages:", err.message);
+  }
+}
+
+async function upsertConversation({
+  company,
+  clientKey,
+  userPhone,
+  lastMessage,
+  lastIntent
+}) {
+  if (!supabase) return;
+
+  try {
+    const { data: existing, error: findError } = await supabase
+      .from("conversations")
+      .select("id, message_count")
+      .eq("client_key", clientKey)
+      .eq("user_phone", userPhone)
+      .maybeSingle();
+
+    if (findError) {
+      console.error("Erro ao buscar conversation:", findError.message);
+      return;
+    }
+
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from("conversations")
+        .update({
+          company_id: company.id ?? null,
+          client_key: clientKey,
+          user_phone: userPhone,
+          last_message: lastMessage,
+          last_intent: lastIntent || null,
+          message_count: Number(existing.message_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        console.error("Erro ao atualizar conversations:", updateError.message);
+      }
+    } else {
+      const { error: insertError } = await supabase
+        .from("conversations")
+        .insert({
+          company_id: company.id ?? null,
+          client_key: clientKey,
+          user_phone: userPhone,
+          last_message: lastMessage,
+          last_intent: lastIntent || null,
+          message_count: 1
+        });
+
+      if (insertError) {
+        console.error("Erro ao inserir conversations:", insertError.message);
+      }
+    }
+  } catch (err) {
+    console.error("Falha em upsertConversation:", err.message);
+  }
+}
+
+/* =========================================================
    INTENT DETECTION
 ========================================================= */
 async function detectIntent(company, message) {
@@ -631,9 +725,44 @@ app.post("/webhook", async (req, res) => {
     const intentData = await detectIntent(company, text);
     console.log(`[${clientKey}] intent=`, intentData);
 
+    await insertMessageLog({
+      company,
+      clientKey,
+      userPhone: from,
+      direction: "user",
+      message: text,
+      intent: intentData.intent
+    });
+
+    await upsertConversation({
+      company,
+      clientKey,
+      userPhone: from,
+      lastMessage: text,
+      lastIntent: intentData.intent
+    });
+
     const exactLinkReply = findDownloadLinks(knowledge, intentData, text);
     if (exactLinkReply) {
       await sendMessage(company, from, exactLinkReply);
+
+      await insertMessageLog({
+        company,
+        clientKey,
+        userPhone: from,
+        direction: "assistant",
+        message: exactLinkReply,
+        intent: intentData.intent
+      });
+
+      await upsertConversation({
+        company,
+        clientKey,
+        userPhone: from,
+        lastMessage: exactLinkReply,
+        lastIntent: intentData.intent
+      });
+
       pushHistory(session, "user", text);
       pushHistory(session, "assistant", exactLinkReply);
       return;
@@ -651,6 +780,23 @@ app.post("/webhook", async (req, res) => {
     );
 
     await sendMessage(company, from, reply);
+
+    await insertMessageLog({
+      company,
+      clientKey,
+      userPhone: from,
+      direction: "assistant",
+      message: reply,
+      intent: intentData.intent
+    });
+
+    await upsertConversation({
+      company,
+      clientKey,
+      userPhone: from,
+      lastMessage: reply,
+      lastIntent: intentData.intent
+    });
 
     pushHistory(session, "user", text);
     pushHistory(session, "assistant", reply);

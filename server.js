@@ -102,6 +102,16 @@ app.post("/webhook", async (req, res) => {
 
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
+    const status = value?.statuses?.[0];
+
+    if (status) {
+      console.log("STATUS EVENT:", {
+        status: status.status,
+        recipient_id: status.recipient_id,
+        phone_number_id: value?.metadata?.phone_number_id,
+        errors: status.errors || []
+      });
+    }
 
     if (!message) {
       console.log("Sem message no payload");

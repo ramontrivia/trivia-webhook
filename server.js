@@ -6,69 +6,45 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 const PORT = process.env.PORT || 8080;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const GRAPH_VERSION = process.env.GRAPH_VERSION || "v25.0";
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "";
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0";
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("Supabase nao configurado.");
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function graphUrl(phoneId) {
-  return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`;
+function safeTrim(v) {
+  return String(v || "").trim();
 }
 
-// 🔎 Busca empresa
-async function getCompany(phoneId) {
-  const { data } = await supabase
+function graphMessagesUrl(phoneNumberId) {
+  return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
+}
+
+async function getCompanyByPhone(phoneNumberId) {
+  const { data, error } = await supabase
     .from("companies")
     .select("*")
-    .eq("phone_number_id", phoneId)
+    .eq("phone_number_id", String(phoneNumberId))
+    .limit(1)
     .maybeSingle();
 
-  return data;
+  if (error) {
+    console.error("Erro ao buscar empresa:", error.message);
+    return null;
+  }
+
+  return data || null;
 }
 
-// 💾 salva mensagem
-async function saveMessage(client_key, from, message, role) {
-  await supabase.from("messages").insert({
-    client_key,
-    from_number: from,
-    message,
-    role
-  });
-}
-
-// 🧠 IA (OpenAI)
-async function askAI(history, message) {
+async function sendTextMessage(company, to, text) {
   const resp = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Você é a Mel, uma atendente estratégica, humana e objetiva. Fale de forma natural, uma pergunta por vez, foco em entender o cliente e levar à decisão."
-        },
-        ...history,
-        { role: "user", content: message }
-      ]
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`
-      }
-    }
-  );
-
-  return resp.data.choices[0].message.content;
-}
-
-// 📤 envia mensagem
-async function sendMessage(company, to, text) {
-  await axios.post(
-    graphUrl(company.phone_number_id),
+    graphMessagesUrl(company.phone_number_id),
     {
       messaging_product: "whatsapp",
       to,
@@ -79,71 +55,101 @@ async function sendMessage(company, to, text) {
       headers: {
         Authorization: `Bearer ${company.whatsapp_token}`,
         "Content-Type": "application/json"
-      }
+      },
+      timeout: 20000
     }
   );
+
+  console.log("SEND OK:", JSON.stringify(resp.data, null, 2));
 }
 
-// 🔁 webhook
+app.get("/", (req, res) => {
+  res.status(200).send("OK");
+});
+
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  console.log("GET /webhook HIT", { mode, tokenReceived: token ? "***" : "" });
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Webhook verificado com sucesso.");
+    return res.status(200).send(challenge);
+  }
+
+  console.log("Falha na verificacao do webhook.");
+  return res.sendStatus(403);
+});
+
 app.post("/webhook", async (req, res) => {
+  console.log("POST /webhook HIT");
+  console.log("BODY:", JSON.stringify(req.body, null, 2));
+
   res.sendStatus(200);
 
   try {
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
+    const status = value?.statuses?.[0];
+    const phoneId = safeTrim(value?.metadata?.phone_number_id);
 
-    if (!message) return;
+    if (status) {
+      console.log("STATUS EVENT:", JSON.stringify(status, null, 2));
+    }
 
-    const phoneId = value?.metadata?.phone_number_id;
-    const from = message.from;
-    const text = message.text?.body || "";
+    if (!message) {
+      console.log("SEM MESSAGE NO PAYLOAD");
+      return;
+    }
 
-    console.log("MSG:", text);
+    const from = safeTrim(message.from);
+    const type = safeTrim(message.type);
+    const text = safeTrim(message.text?.body);
 
-    const company = await getCompany(phoneId);
-    if (!company) return;
+    console.log("FROM:", from);
+    console.log("TYPE:", type);
+    console.log("TEXT:", text);
+    console.log("PHONE ID:", phoneId);
 
-    // salva usuário
-    await saveMessage(company.client_key, from, text, "user");
+    const company = await getCompanyByPhone(phoneId);
 
-    // busca histórico
-    const { data: history } = await supabase
-      .from("messages")
-      .select("message, role")
-      .eq("client_key", company.client_key)
-      .eq("from_number", from)
-      .order("created_at", { ascending: true })
-      .limit(10);
+    if (!company) {
+      console.log("Empresa nao encontrada para phone_number_id:", phoneId);
+      return;
+    }
 
-    const formattedHistory = (history || []).map((m) => ({
-      role: m.role,
-      content: m.message
-    }));
+    console.log("COMPANY ENCONTRADA:", {
+      client_key: company.client_key,
+      phone_number_id: company.phone_number_id
+    });
 
-    // IA responde
-    const aiResponse = await askAI(formattedHistory, text);
+    let reply = "Recebi sua mensagem.";
 
-    // salva resposta
-    await saveMessage(company.client_key, from, aiResponse, "assistant");
+    if (type === "text" && text) {
+      reply = `Recebi sua mensagem: ${text}`;
+    } else {
+      reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
+    }
 
-    // envia
-    await sendMessage(company, from, aiResponse);
+    await sendTextMessage(company, from, reply);
   } catch (err) {
-    console.error("ERROR:", err?.response?.data || err.message);
+    console.error(
+      "WEBHOOK ERROR FULL:",
+      JSON.stringify(
+        {
+          status: err?.response?.status,
+          data: err?.response?.data,
+          message: err?.message
+        },
+        null,
+        2
+      )
+    );
   }
-});
-
-// verificação meta
-app.get("/webhook", (req, res) => {
-  if (
-    req.query["hub.mode"] === "subscribe" &&
-    req.query["hub.verify_token"] === VERIFY_TOKEN
-  ) {
-    return res.send(req.query["hub.challenge"]);
-  }
-  res.sendStatus(403);
 });
 
 app.listen(PORT, () => {
-  console.log("🚀 TRIVIA BOT RODANDO");
+  console.log("SERVER RUNNING ON PORT:", PORT);
 });

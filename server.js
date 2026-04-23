@@ -49,6 +49,20 @@ function graphMessagesUrl(phoneNumberId) {
   return `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
 }
 
+function getBusinessName(company) {
+  return safeTrim(company?.name || company?.nome || "Empresa");
+}
+
+function getAssistantName(company) {
+  return safeTrim(
+    company?.assistant_name || company?.assistant || company?.persona_name || "Atendente"
+  );
+}
+
+function getClientStatus(company) {
+  return normalizeText(company?.status || company?.active || "active");
+}
+
 function assertEnv() {
   const missing = [];
 
@@ -83,14 +97,27 @@ async function loadCompanies() {
       return;
     }
 
-    companiesCache = (data || []).filter(
-      (c) =>
+    companiesCache = (data || []).filter((c) => {
+      const hasRequired =
         safeTrim(c.client_key) &&
         safeTrim(c.phone_number_id) &&
-        safeTrim(c.whatsapp_token)
-    );
+        safeTrim(c.whatsapp_token);
+
+      if (!hasRequired) return false;
+
+      const status = getClientStatus(c);
+      return !["inactive", "inativo", "off", "disabled"].includes(status);
+    });
 
     console.log(`Companies carregadas: ${companiesCache.length}`);
+    console.log(
+      "Clients ativos:",
+      companiesCache.map((c) => ({
+        client_key: c.client_key,
+        company: getBusinessName(c),
+        phone_number_id: c.phone_number_id
+      }))
+    );
   } catch (err) {
     console.error("Falha ao carregar companies:", err.message);
     companiesCache = [];
@@ -196,13 +223,11 @@ function loadKnowledge(clientKey) {
 /* =========================================================
    SESSION
 ========================================================= */
-function getSession(clientKey, user) {
-  const id = `${clientKey}_${user}`;
+function getSession(clientKey, userPhone) {
+  const id = `${clientKey}_${userPhone}`;
 
   if (!sessions.has(id)) {
-    sessions.set(id, {
-      history: []
-    });
+    sessions.set(id, { history: [] });
   }
 
   return sessions.get(id);
@@ -217,7 +242,7 @@ function pushHistory(session, role, content) {
 }
 
 /* =========================================================
-   DB LOGS / CONVERSATIONS
+   DB
 ========================================================= */
 async function insertMessageLog({
   company,
@@ -233,7 +258,7 @@ async function insertMessageLog({
     const payload = {
       company_id: company.id ?? null,
       client_key: clientKey,
-      company_name: company.name || "",
+      company_name: getBusinessName(company),
       user_phone: userPhone,
       direction,
       message,
@@ -311,13 +336,13 @@ async function upsertConversation({
 }
 
 /* =========================================================
-   INTENT DETECTION
+   INTENT
 ========================================================= */
 async function detectIntent(company, message) {
   const system = `
 Classifique a intenção da frase de um usuário no WhatsApp.
 
-Empresa atual: ${company.name}
+Empresa atual: ${getBusinessName(company)}
 
 Responda SOMENTE JSON válido neste formato:
 {
@@ -452,8 +477,8 @@ function scoreBlock(block, message, intentData) {
     if (base.includes("solucao")) score += 4;
   }
 
-  if (intentData.audience === "passageiro") {
-    if (base.includes("passageiro")) score += 8;
+  if (intentData.audience === "passageiro" && base.includes("passageiro")) {
+    score += 8;
   }
 
   if (intentData.audience === "motorista") {
@@ -488,15 +513,12 @@ function retrieveContext(knowledge, message, intentData, topK = 4) {
   }
 
   return selected
-    .map(
-      (b) =>
-        `ARQUIVO: ${b.file}\nBLOCO: ${b.index + 1}\n${b.content}`
-    )
+    .map((b) => `ARQUIVO: ${b.file}\nBLOCO: ${b.index + 1}\n${b.content}`)
     .join("\n\n--------------------\n\n");
 }
 
 /* =========================================================
-   EXACT LINKS
+   LINKS EXATOS
 ========================================================= */
 function extractUrls(text) {
   return [...new Set((text.match(/https?:\/\/[^\s)]+/g) || []))];
@@ -516,7 +538,9 @@ function findDownloadLinks(knowledge, intentData, message) {
         (u.toLowerCase().includes("client") ||
           u.toLowerCase().includes("passageiro"))
     ) ||
-    urls.find((u) => u.includes("play.google.com") && !u.toLowerCase().includes("driver")) ||
+    urls.find(
+      (u) => u.includes("play.google.com") && !u.toLowerCase().includes("driver")
+    ) ||
     null;
 
   const androidDriver =
@@ -587,9 +611,9 @@ function findDownloadLinks(knowledge, intentData, message) {
 /* =========================================================
    AI REPLY
 ========================================================= */
-async function generateReply(client, session, message, context, intentData) {
+async function generateReply(company, session, message, context, intentData) {
   const system = `
-Você é ${client.assistant_name}, atendente oficial da empresa ${client.name}.
+Você é ${getAssistantName(company)}, atendente oficial da empresa ${getBusinessName(company)}.
 
 REGRAS:
 - responda de forma humana, natural e profissional
@@ -644,11 +668,11 @@ ${context || "(sem contexto suficiente)"}
 }
 
 /* =========================================================
-   WHATSAPP
+   SEND MESSAGE
 ========================================================= */
 async function sendMessage(company, to, text) {
   try {
-    await axios.post(
+    const resp = await axios.post(
       graphMessagesUrl(company.phone_number_id),
       {
         messaging_product: "whatsapp",
@@ -664,6 +688,12 @@ async function sendMessage(company, to, text) {
         timeout: 20000
       }
     );
+
+    console.log("SEND OK:", {
+      to,
+      phone_number_id: company.phone_number_id,
+      response: resp.data
+    });
   } catch (err) {
     console.error(
       "sendMessage error:",
@@ -675,146 +705,5 @@ async function sendMessage(company, to, text) {
 }
 
 /* =========================================================
-   WEBHOOK
-========================================================= */
-app.get("/", (req, res) => {
-  res.status(200).send("OK");
-});
-
-app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
-  }
-
-  return res.sendStatus(403);
-});
-
-app.post("/webhook", async (req, res) => {
-  res.sendStatus(200);
-
-  try {
-    const entry = req.body.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
-    const message = value?.messages?.[0];
-
-    if (!message) return;
-
-    const from = message.from;
-    const text = safeTrim(message.text?.body);
-    if (!from || !text) return;
-
-    const phoneId = value?.metadata?.phone_number_id;
-    const company = getCompanyByPhone(phoneId);
-
-    if (!company) {
-      console.log(`Empresa não encontrada para phone_number_id=${phoneId}`);
-      return;
-    }
-
-    const clientKey = company.client_key;
-    const session = getSession(clientKey, from);
-    const knowledge = loadKnowledge(clientKey);
-
-    console.log(`Mensagem recebida | client=${clientKey} | from=${from} | text=${text}`);
-
-    const intentData = await detectIntent(company, text);
-    console.log(`[${clientKey}] intent=`, intentData);
-
-    await insertMessageLog({
-      company,
-      clientKey,
-      userPhone: from,
-      direction: "user",
-      message: text,
-      intent: intentData.intent
-    });
-
-    await upsertConversation({
-      company,
-      clientKey,
-      userPhone: from,
-      lastMessage: text,
-      lastIntent: intentData.intent
-    });
-
-    const exactLinkReply = findDownloadLinks(knowledge, intentData, text);
-    if (exactLinkReply) {
-      await sendMessage(company, from, exactLinkReply);
-
-      await insertMessageLog({
-        company,
-        clientKey,
-        userPhone: from,
-        direction: "assistant",
-        message: exactLinkReply,
-        intent: intentData.intent
-      });
-
-      await upsertConversation({
-        company,
-        clientKey,
-        userPhone: from,
-        lastMessage: exactLinkReply,
-        lastIntent: intentData.intent
-      });
-
-      pushHistory(session, "user", text);
-      pushHistory(session, "assistant", exactLinkReply);
-      return;
-    }
-
-    const context = retrieveContext(knowledge, text, intentData, 4);
-    console.log(`[${clientKey}] context_length=${context.length}`);
-
-    const reply = await generateReply(
-      company,
-      session,
-      text,
-      context,
-      intentData
-    );
-
-    await sendMessage(company, from, reply);
-
-    await insertMessageLog({
-      company,
-      clientKey,
-      userPhone: from,
-      direction: "assistant",
-      message: reply,
-      intent: intentData.intent
-    });
-
-    await upsertConversation({
-      company,
-      clientKey,
-      userPhone: from,
-      lastMessage: reply,
-      lastIntent: intentData.intent
-    });
-
-    pushHistory(session, "user", text);
-    pushHistory(session, "assistant", reply);
-  } catch (err) {
-    console.error("Webhook error:", err?.response?.data || err.message);
-  }
-});
-
-/* =========================================================
-   START
-========================================================= */
-async function start() {
-  assertEnv();
-  await loadCompanies();
-
-  app.listen(PORT, () => {
-    console.log("SERVER TRIVIA RUNNING");
-  });
-}
-
-start();
+   WEBHOOK ROUTES
+============================================

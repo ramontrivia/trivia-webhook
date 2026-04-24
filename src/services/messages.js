@@ -2,7 +2,9 @@ import { supabase } from "./supabase.js";
 
 export async function saveMessage({
   companyId,
-  from,
+  companyName,
+  clientKey,
+  userPhone,
   content,
   role
 }) {
@@ -11,7 +13,9 @@ export async function saveMessage({
     .insert([
       {
         company_id: companyId,
-        from_number: from,
+        company_name: companyName,
+        client_key: clientKey,
+        user_phone: userPhone,
         content,
         role
       }

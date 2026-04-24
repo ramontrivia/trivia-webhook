@@ -1,10 +1,11 @@
 import express from "express";
+import { handleIncomingMessage } from "../services/orchestrator.js";
 
 const router = express.Router();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "";
 
-// Verificação do Meta
+// GET continua igual
 router.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -21,12 +22,13 @@ router.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// Recebimento (ainda simples)
+// POST atualizado
 router.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
-  console.log("POST /webhook HIT");
-  console.log("BODY:", JSON.stringify(req.body, null, 2));
+  await handleIncomingMessage({
+    body: req.body
+  });
 });
 
 export default router;

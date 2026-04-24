@@ -16,6 +16,8 @@ export async function saveMessage({ company, from, content, role }) {
         client_key: company?.client_key || null,
         company_name: company?.name || null,
         user_phone: from,
+
+        direction: role,
         message: content,
         intent: null,
         content: content,

@@ -19,6 +19,7 @@ export async function saveMessage({ company, from, content, role }) {
         ditection: role,
         message: content,
         intent: null,
+        content: content,
         role: role
       }
     ])

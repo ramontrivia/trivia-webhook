@@ -1,15 +1,23 @@
 import express from "express";
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 8080;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 const FALLBACK_CLIENT_KEY = process.env.CLIENT_KEY || "bandeirante";
 const FALLBACK_PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID || "";
@@ -18,6 +26,10 @@ const FALLBACK_WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Supabase nao configurado.");
   process.exit(1);
+}
+
+if (!OPENAI_API_KEY) {
+  console.warn("OPENAI_API_KEY nao configurada. IA nao vai funcionar.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -56,6 +68,8 @@ async function getCompanyByPhone(phoneNumberId) {
 
     return {
       client_key: FALLBACK_CLIENT_KEY,
+      name: FALLBACK_CLIENT_KEY,
+      assistant_name: "Assistente",
       phone_number_id: FALLBACK_PHONE_NUMBER_ID,
       whatsapp_token: FALLBACK_WHATSAPP_TOKEN
     };
@@ -85,6 +99,92 @@ async function sendTextMessage(company, to, text) {
   );
 
   console.log("SEND OK:", JSON.stringify(resp.data, null, 2));
+}
+
+async function loadKnowledge(clientKey) {
+  const folder = path.join(__dirname, "knowledge", clientKey);
+
+  try {
+    const files = await fs.readdir(folder);
+
+    const txtFiles = files
+      .filter((file) => file.endsWith(".txt"))
+      .sort();
+
+    if (!txtFiles.length) {
+      console.log("Nenhum arquivo .txt encontrado em:", folder);
+      return "";
+    }
+
+    const parts = [];
+
+    for (const file of txtFiles) {
+      const fullPath = path.join(folder, file);
+      const content = await fs.readFile(fullPath, "utf8");
+
+      parts.push(`\n\n===== ${file} =====\n${content}`);
+    }
+
+    return parts.join("\n");
+  } catch (err) {
+    console.error("Erro ao carregar knowledge:", {
+      clientKey,
+      message: err.message
+    });
+
+    return "";
+  }
+}
+
+async function askAI({ company, userText }) {
+  const clientKey = safeTrim(company.client_key || FALLBACK_CLIENT_KEY);
+  const assistantName = safeTrim(company.assistant_name || "Assistente");
+  const cityName = safeTrim(company.name || clientKey);
+
+  const knowledge = await loadKnowledge(clientKey);
+
+  const systemPrompt = `
+Voce e ${assistantName}, o assistente oficial da cidade/projeto ${cityName}.
+
+Use obrigatoriamente as informacoes abaixo como sua base principal.
+Se a informacao nao estiver na base, responda com honestidade e diga que ainda nao tem essa informacao cadastrada.
+Nao invente telefone, endereco, preco, horario, nome de empresa ou dado historico.
+Responda em portugues do Brasil.
+Seja claro, humano, util e objetivo.
+Evite respostas longas demais no WhatsApp.
+Quando fizer sentido, faca apenas uma pergunta por vez.
+
+BASE DE CONHECIMENTO:
+${knowledge || "Nenhuma base de conhecimento encontrada ainda."}
+`;
+
+  const resp = await axios.post(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      model: OPENAI_MODEL,
+      temperature: 0.4,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: userText
+        }
+      ]
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 30000
+    }
+  );
+
+  return safeTrim(resp.data?.choices?.[0]?.message?.content) ||
+    "Desculpe, nao consegui gerar uma resposta agora.";
 }
 
 app.get("/", (req, res) => {
@@ -158,15 +258,21 @@ app.post("/webhook", async (req, res) => {
 
     console.log("COMPANY ENCONTRADA:", {
       client_key: company.client_key,
+      name: company.name,
       phone_number_id: company.phone_number_id
     });
 
-    let reply = "Olá! Recebi sua mensagem.";
+    let reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
 
     if (type === "text" && text) {
-      reply = `Recebi sua mensagem: ${text}`;
-    } else {
-      reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
+      if (!OPENAI_API_KEY) {
+        reply = `Recebi sua mensagem: ${text}`;
+      } else {
+        reply = await askAI({
+          company,
+          userText: text
+        });
+      }
     }
 
     await sendTextMessage(company, from, reply);

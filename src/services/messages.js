@@ -16,7 +16,6 @@ export async function saveMessage({ company, from, content, role }) {
         client_key: company?.client_key || null,
         company_name: company?.name || null,
         user_phone: from,
-        ditection: role,
         message: content,
         intent: null,
         content: content,
@@ -37,6 +36,5 @@ export async function saveMessage({ company, from, content, role }) {
   }
 
   console.log("MENSAGEM SALVA COM SUCESSO:", data);
-
   return true;
 }

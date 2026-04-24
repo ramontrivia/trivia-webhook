@@ -10,21 +10,28 @@ export async function saveMessage({
     .from("messages")
     .insert([
       {
-        company_id: company.id || null,
+        company: company.id || null,
         client_key: company.client_key || null,
         company_name: company.name || null,
         user_phone: from,
-        content,
-        role
+        ditection: role,
+        message: content,
+        content: content,
+        role: role
       }
     ]);
 
   if (error) {
-    console.error("Erro ao salvar mensagem:", error.message);
+    console.error("Erro ao salvar mensagem:", {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
     return false;
   }
 
-  console.log("Mensagem salva:", {
+  console.log("Mensagem salva com sucesso:", {
     user_phone: from,
     role
   });

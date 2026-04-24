@@ -10,7 +10,7 @@ export async function handleIncomingMessage({ body }) {
     const value = body?.entry?.[0]?.changes?.[0]?.value;
 
     if (!value) {
-      console.log("Sem value no payload");
+      console.log("SEM VALUE");
       return;
     }
 
@@ -19,12 +19,12 @@ export async function handleIncomingMessage({ body }) {
     const phoneId = String(value?.metadata?.phone_number_id || "").trim();
 
     if (status) {
-      console.log("STATUS EVENT:", status);
+      console.log("STATUS EVENT:", status.status);
       return;
     }
 
     if (!message) {
-      console.log("Sem mensagem");
+      console.log("SEM MENSAGEM");
       return;
     }
 
@@ -32,7 +32,7 @@ export async function handleIncomingMessage({ body }) {
     const type = String(message.type || "").trim();
     const text = String(message.text?.body || "").trim();
 
-    console.log("Nova mensagem:", {
+    console.log("MENSAGEM RECEBIDA:", {
       from,
       type,
       text,
@@ -42,17 +42,17 @@ export async function handleIncomingMessage({ body }) {
     const company = await getCompanyByPhoneNumber(phoneId);
 
     if (!company) {
-      console.log("Empresa nao encontrada para phone_number_id:", phoneId);
+      console.log("EMPRESA NAO ENCONTRADA:", phoneId);
       return;
     }
 
-    console.log("Empresa encontrada:", {
+    console.log("EMPRESA ENCONTRADA:", {
       id: company.id,
       client_key: company.client_key,
       name: company.name
     });
 
-    let reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
+    let reply = "Recebi sua mensagem.";
 
     if (type === "text" && text) {
       await saveMessage({
@@ -63,7 +63,9 @@ export async function handleIncomingMessage({ body }) {
       });
 
       reply = await generateResponse({
-        text
+        text,
+        company,
+        from
       });
 
       await saveMessage({
@@ -80,10 +82,10 @@ export async function handleIncomingMessage({ body }) {
       text: reply
     });
 
-    console.log("Resposta enviada com sucesso");
+    console.log("RESPOSTA ENVIADA");
 
   } catch (err) {
-    console.error("ERRO GERAL ORCHESTRATOR:", {
+    console.error("ERRO ORCHESTRATOR:", {
       message: err?.message,
       status: err?.response?.status,
       data: err?.response?.data

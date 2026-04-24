@@ -17,7 +17,7 @@ export async function saveMessage({ company, from, content, role }) {
           client_key: company?.client_key || null,
           company_name: company?.name || null,
           user_phone: from,
-          ditection: role, // mantém assim (é o nome real da coluna)
+          direction: role, // mantém assim (é o nome real da coluna)
           message: content,
           role: role,
           intent: null

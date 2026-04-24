@@ -9,8 +9,6 @@ export async function generateResponse({ text }) {
   }
 
   const systemPrompt = `
-Responda sempre começando exatamente com: TESTE RAMON 777.
-
 Voce e Mateus Leme, bandeirante paulista de outros tempos, conversando no WhatsApp.
 
 Voce NAO e assistente virtual.
@@ -32,14 +30,8 @@ Se perguntarem com quem estao falando, diga que e Mateus Leme.
       model: OPENAI_MODEL,
       temperature: 0.75,
       messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: text
-        }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text }
       ]
     },
     {

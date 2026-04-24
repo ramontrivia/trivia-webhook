@@ -55,10 +55,8 @@ export async function handleIncomingMessage({ body }) {
 
     if (type === "text" && text) {
       await saveMessage({
-        companyId: company.id,
-        companyName: company.name,
-        clientKey: company.client_key,
-        userPhone: from,
+        company,
+        from,
         content: text,
         role: "user"
       });
@@ -68,10 +66,8 @@ export async function handleIncomingMessage({ body }) {
       });
 
       await saveMessage({
-        companyId: company.id,
-        companyName: company.name,
-        clientKey: company.client_key,
-        userPhone: from,
+        company,
+        from,
         content: reply,
         role: "assistant"
       });

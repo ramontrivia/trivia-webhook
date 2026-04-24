@@ -11,6 +11,7 @@ app.get("/", (req, res) => {
   res.status(200).send("OK");
 });
 
+// 🔥 IMPORTANTE: TODAS AS REQUISIÇÕES PASSAM PELO WEBHOOK
 app.use("/", webhookRoutes);
 
 app.listen(PORT, () => {

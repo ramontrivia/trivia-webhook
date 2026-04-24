@@ -1,4 +1,5 @@
 import { sendTextMessage } from "./whatsapp.js";
+import { getCompanyByPhoneNumber } from "./companies.js";
 
 export async function handleIncomingMessage({ body }) {
   try {
@@ -28,16 +29,18 @@ export async function handleIncomingMessage({ body }) {
       phoneId
     });
 
-    // ⚠️ TEMPORÁRIO (teste)
-    const fakeCompany = {
-      phone_number_id: phoneId,
-      whatsapp_token: process.env.WHATSAPP_TOKEN
-    };
+    // 🔥 BUSCAR EMPRESA REAL
+    const company = await getCompanyByPhoneNumber(phoneId);
+
+    if (!company) {
+      console.log("Empresa nao encontrada");
+      return;
+    }
 
     const reply = `Recebi: ${text}`;
 
     await sendTextMessage({
-      company: fakeCompany,
+      company,
       to: from,
       text: reply
     });

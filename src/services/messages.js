@@ -1,10 +1,8 @@
 import { supabase } from "./supabase.js";
 
 export async function saveMessage({
-  companyId,
-  companyName,
-  clientKey,
-  userPhone,
+  company,
+  from,
   content,
   role
 }) {
@@ -12,10 +10,10 @@ export async function saveMessage({
     .from("messages")
     .insert([
       {
-        company_id: companyId,
-        company_name: companyName,
-        client_key: clientKey,
-        user_phone: userPhone,
+        company_id: company.id || null,
+        client_key: company.client_key || null,
+        company_name: company.name || null,
+        user_phone: from,
         content,
         role
       }
@@ -23,5 +21,13 @@ export async function saveMessage({
 
   if (error) {
     console.error("Erro ao salvar mensagem:", error.message);
+    return false;
   }
+
+  console.log("Mensagem salva:", {
+    user_phone: from,
+    role
+  });
+
+  return true;
 }

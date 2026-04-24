@@ -1,4 +1,3 @@
-console.log("VERSAO NOVA DO CODIGO ATIVA");
 import { sendTextMessage } from "./whatsapp.js";
 import { getCompanyByPhoneNumber } from "./companies.js";
 import { generateResponse } from "./openai.js";
@@ -20,12 +19,7 @@ export async function handleIncomingMessage({ body }) {
     const phoneId = String(value?.metadata?.phone_number_id || "").trim();
 
     if (status) {
-      console.log("STATUS EVENT:", {
-        status: status.status,
-        recipient_id: status.recipient_id,
-        phone_number_id: phoneId,
-        errors: status.errors || []
-      });
+      console.log("STATUS EVENT:", status);
       return;
     }
 
@@ -51,6 +45,12 @@ export async function handleIncomingMessage({ body }) {
       console.log("Empresa nao encontrada para phone_number_id:", phoneId);
       return;
     }
+
+    console.log("Empresa encontrada:", {
+      id: company.id,
+      client_key: company.client_key,
+      name: company.name
+    });
 
     let reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
 
@@ -80,8 +80,10 @@ export async function handleIncomingMessage({ body }) {
       text: reply
     });
 
+    console.log("Resposta enviada com sucesso");
+
   } catch (err) {
-    console.error("Erro no orchestrator:", {
+    console.error("ERRO GERAL ORCHESTRATOR:", {
       message: err?.message,
       status: err?.response?.status,
       data: err?.response?.data

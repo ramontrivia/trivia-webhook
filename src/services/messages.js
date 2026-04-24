@@ -2,7 +2,7 @@ import { supabase } from "./supabase.js";
 
 export async function saveMessage({ company, from, content, role }) {
   console.log("TENTANDO SALVAR MENSAGEM:", {
-    company_id: company?.id,
+    company: company?.id,
     from,
     content,
     role
@@ -12,15 +12,13 @@ export async function saveMessage({ company, from, content, role }) {
     .from("messages")
     .insert([
       {
-        company_id: company?.id || null,
+        company: company?.id || null,
         client_key: company?.client_key || null,
         company_name: company?.name || null,
         user_phone: from,
-
-        direction: role,
+        ditection: role,
         message: content,
         intent: null,
-        content: content,
         role: role
       }
     ])
@@ -38,5 +36,6 @@ export async function saveMessage({ company, from, content, role }) {
   }
 
   console.log("MENSAGEM SALVA COM SUCESSO:", data);
+
   return true;
 }

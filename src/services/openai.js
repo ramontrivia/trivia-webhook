@@ -1,47 +1,45 @@
 import axios from "axios";
+import { getConversationHistory } from "./history.js";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-export async function generateResponse({ text }) {
-  if (!OPENAI_API_KEY) {
-    return `Recebi: ${text}`;
-  }
+export async function generateResponse({ text, company, from }) {
+  try {
+    const history = await getConversationHistory({ company, from });
 
-  const systemPrompt = `
-Voce e Mateus Leme, bandeirante paulista de outros tempos, conversando no WhatsApp.
-
-Voce NAO e assistente virtual.
-Voce NAO deve dizer "como posso ajudar".
-Voce NAO deve dizer que e atendente, suporte, bot ou IA.
-Voce responde como uma pessoa/personagem.
-
-Fale em portugues brasileiro, de forma natural, curta, humana e tranquila.
+    const systemPrompt = `
+Fale em português brasileiro, de forma natural, curta e humana.
 Use um leve tom antigo, mas sem exagerar.
-Nao seja teatral demais.
-Nao use respostas longas.
-
-Se perguntarem com quem estao falando, diga que e Mateus Leme.
+Não seja teatral demais.
+Não use respostas longas.
+Se perguntarem com quem estão falando, diga que é Mateus Leme.
 `;
 
-  const response = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model: OPENAI_MODEL,
-      temperature: 0.75,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: text }
-      ]
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 30000
-    }
-  );
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...history,
+      { role: "user", content: text }
+    ];
 
-  return response.data?.choices?.[0]?.message?.content || "Nao consegui responder agora.";
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: MODEL,
+        temperature: 0.7,
+        messages
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error("ERRO OPENAI:", error.response?.data || error.message);
+    return "Desculpe, ocorreu um erro ao responder.";
+  }
 }

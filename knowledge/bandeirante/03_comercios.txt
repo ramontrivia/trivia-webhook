@@ -1,1 +1,282 @@
+BASE DE COMÉRCIOS DE MATEUS LEME
 
+Esta base contém comércios, prestadores de serviço, telefones e endereços da cidade.
+
+REGRAS PARA USAR ESTA BASE:
+
+1. Quando alguém perguntar por comércio, serviço, telefone, endereço ou indicação, procure nesta base.
+
+2. Responda de forma natural, como Mateus Leme, sem parecer lista fria.
+
+3. Se houver mais de uma opção, apresente até 3 opções primeiro.
+
+4. Se a pessoa pedir mais opções, continue mostrando as demais.
+
+5. Nunca invente telefone, endereço ou nome de comércio.
+
+6. Se não encontrar a informação, diga:
+"Ainda não tenho esse comércio registrado por aqui."
+
+7. Se a pessoa perguntar algo como:
+- "tem farmácia?"
+- "onde tem mecânico?"
+- "preciso de eletricista"
+- "sabe telefone de padaria?"
+- "tem salão de beleza?"
+
+Use as categorias abaixo para responder.
+
+EXEMPLO DE RESPOSTA:
+
+"Tenho sim. Aqui na cidade encontrei estas opções:
+
+DROGA REDE
+Tel: 3535-1222
+Praça Benedito Valadares, 186 – Centro
+
+DROGAMAXI
+Tel: 2342-1800
+Av. Padre Vilaça, 526 – Centro
+
+Se quiser, posso te passar mais opções também."
+
+A partir daqui começa a base de comércios.
+
+===== academias.txt =====
+ACADEMIA SUPORTE
+Tel: (31) 3535-2268
+Rua Miguel Alves Diniz, 38 – Centro
+
+GOLDEN CAMP MUAY THAI
+Tel: (31) 99640-4321
+Rua Pref. Capitão Chaves, 72 – Centro
+
+STUDIO ARI PILATES E FUNCIONAL
+Tel: (31) 99065-1224
+Rua Pereira Guimarães, 616 – Centro
+
+CENTRO DE TREINAMENTO SENA FIGHT TEAM
+Tel: (31) 99584-1143
+Rua Oder de Oliveira, 07 – Central
+
+CROSS FIT MATEUS LEME
+Tel: (31) 99955-9180
+Rua Joaquim de Aguiar, 423 – Centro
+
+STUDIO ATEEM PILATES E FISIOTERAPIA
+Tel: (31) 3138-1515
+Rua Miguel Alves Diniz, 277 – Loja 101
+
+===== acougue.txt =====
+CENTRAL DA CARNE
+Tel: (31) 3535-3286
+Rua Guaraciaba Passos, 945 – Centro
+
+CASA DE CARNES PADRE VILAÇA
+Tel: (31) 3535-2908
+Rua Guaraciaba Passos, 544 – Centro
+
+CASA DE CARNES MATEUS LEME
+Tel: (31) 3535-3286
+Av. Getúlio Vargas, 475 – Centro
+
+===== advogados.txt =====
+MOREIRA DINIZ ADVOGADOS
+Tel: 3535-1671
+Av. Prefeito José Surdo, 1301 – 1º andar – N. Sra do Rosário
+
+Dr. Delber Antônio M. Diniz
+Tel: 99135-8428
+
+Dra. Maria Martinelli M. Diniz
+Tel: 99255-2681
+
+Dr. Alexandre Rodrigues Siqueira
+Tel: 99795-4396
+
+===== servicos_gerais.txt =====
+SOL JARDINAGEM
+Tel: 98102-3045
+
+TIAOZIN JARDINAGEM
+Tel: 99763-7065
+
+CANTINHO DA LIMPEZA
+Tel: 99605-3277
+
+SILVA – LIMPA LOTE
+Tel: 99956-7225
+
+MINAS LIMP
+Tel: 3428-3900 / 99951-5573
+
+ANDERSON ARAÚJO
+Tel: 99879-6090
+
+DG SOLUÇÕES ELÉTRICAS
+Tel: 99592-9791
+
+DAMIÃO SOLUÇÕES ELÉTRICAS
+Tel: 97167-8210
+
+SENHOR ELIAS
+Tel: 99609-0208
+
+===== comercio.txt =====
+PRÓ BIKE
+Tel: 3535-2368
+Rua Guaraciaba Passos, 1342 – Centro
+
+PAPELARIA BRUNA
+Tel: 98389-0364
+
+FUTURA PAPELARIA
+Tel: 3535-1275
+
+PANIFICADORA C&E
+Tel: 3535-2066
+
+PADARIA CRAVO E CANELA
+Tel: 3535-1029
+
+LUIDAR
+Tel: 3535-4103
+
+CLUBE DAS TINTAS
+Tel: 3535-2282
+
+===== beleza.txt =====
+BARBEARIA THE ART
+Tel: 99485-6225
+
+SANTOS BARBEARIA
+Tel: 98400-8621
+
+SALÃO DA APARECIDA
+Tel: 99632-1872
+
+SALÃO PURO GLAMOUR
+Tel: 99908-7983
+
+STUDIO ANA DELAS
+Tel: 99845-8873
+
+BELEZA POPULAR
+Tel: 99639-0011
+
+CENTRO DE ESTÉTICA MARÍLIA SANTIAGO
+Tel: 99944-5573
+
+ESPAÇO RENOVA
+Tel: 97172-8354
+
+LR ESTÉTICA
+Tel: 99839-2651
+
+DANIELA ESTÉTICA
+Tel: 99797-3211
+
+===== alimentacao.txt =====
+DOCERIA DA SARAH
+Tel: 99738-6513
+
+KI DELÍCIAS
+Tel: 99606-3021
+
+DELÍCIAS DA LU
+Tel: 99154-5466
+
+CAKE'S BOLOS E DOCES
+Tel: 99420-0449
+
+AMANDA CONFEITARIA
+Tel: 98247-3184
+
+BEBEL BOLOS E CIA
+Tel: 99802-2590
+
+===== tecnologia.txt =====
+GOX INTERNET
+Tel: 0800 200 3500
+
+UNIVERSO TECNOLOGIA
+Tel: 0800 009 0004
+
+NEWNET TECNOLOGIA
+Tel: 3535-2805
+
+SEMPRE INTERNET
+Tel: 0800 300 0800
+
+393 INFORMÁTICA
+Tel: 3535-2939
+
+INFO TONNER
+Tel: 3535-2976
+
+===== automotivo.txt =====
+CHECK UP AUTO MECÂNICA
+Tel: 98923-1509
+
+OFICINA ALCIDES
+Tel: 3535-2438
+
+DG AUTO CENTER
+Tel: 97350-5586
+
+OFICINA DO JAIRINHO
+Tel: 98896-8878
+
+DW CENTRO AUTOMOTIVO
+Tel: 99659-3065
+
+BORRACHARIA ROTA 050
+Tel: 99963-0414
+
+===== pets.txt =====
+PET SHOP ANIMAL
+Tel: 99505-0391
+
+EMPÓRIO PET AGRO
+Tel: 99270-9814
+
+CASA RURAL
+Tel: 99524-4567
+
+VET'S HOME
+Tel: 99595-8244
+
+CLÍNICA SÃO JUDAS TADEU
+Tel: 99969-6176
+
+PET LAND
+Tel: 99996-1010
+
+===== veiculos.txt =====
+AVENIDA VEÍCULOS
+Tel: 3535-1250
+
+TREVÃO VEÍCULOS
+Tel: 99948-0235
+
+NOGUEIRA VEÍCULOS
+Tel: 99690-7524
+
+MIGUEL VEÍCULOS
+Tel: 3535-1443
+
+ACG MOTOS E AUTOS
+Tel: 3535-2958 / 99106-6800
+
+LYCAR VEÍCULOS
+Tel: 99468-5167
+
+===== vidracaria.txt =====
+VIDROLAR FC
+Tel: 3535-1700
+
+VIDRAÇARIA VIDRAÇA
+Tel: 3535-2377
+
+VIDRAÇARIA
+Tel: 97161-2618

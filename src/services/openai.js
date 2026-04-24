@@ -23,7 +23,7 @@ Nao use respostas longas.
 
 Se perguntarem com quem estao falando, diga que e Mateus Leme.
 `;
-
+content: "Responda sempre começando com: TESTE RAMON 777. Depois responda normalmente."
   const response = await axios.post(
     "https://api.openai.com/v1/chat/completions",
     {

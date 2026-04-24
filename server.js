@@ -11,6 +11,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GRAPH_VERSION = process.env.GRAPH_VERSION || "v21.0";
 
+const FALLBACK_CLIENT_KEY = process.env.CLIENT_KEY || "bandeirante";
+const FALLBACK_PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID || "";
+const FALLBACK_WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Supabase nao configurado.");
   process.exit(1);
@@ -27,19 +31,37 @@ function graphMessagesUrl(phoneNumberId) {
 }
 
 async function getCompanyByPhone(phoneNumberId) {
+  const cleanPhoneId = safeTrim(phoneNumberId);
+
   const { data, error } = await supabase
     .from("companies")
     .select("*")
-    .eq("phone_number_id", String(phoneNumberId))
+    .eq("phone_number_id", cleanPhoneId)
     .limit(1)
     .maybeSingle();
 
   if (error) {
     console.error("Erro ao buscar empresa:", error.message);
-    return null;
   }
 
-  return data || null;
+  if (data) return data;
+
+  if (
+    cleanPhoneId &&
+    FALLBACK_PHONE_NUMBER_ID &&
+    cleanPhoneId === FALLBACK_PHONE_NUMBER_ID &&
+    FALLBACK_WHATSAPP_TOKEN
+  ) {
+    console.log("Usando fallback do Railway para:", FALLBACK_CLIENT_KEY);
+
+    return {
+      client_key: FALLBACK_CLIENT_KEY,
+      phone_number_id: FALLBACK_PHONE_NUMBER_ID,
+      whatsapp_token: FALLBACK_WHATSAPP_TOKEN
+    };
+  }
+
+  return null;
 }
 
 async function sendTextMessage(company, to, text) {
@@ -49,7 +71,9 @@ async function sendTextMessage(company, to, text) {
       messaging_product: "whatsapp",
       to,
       type: "text",
-      text: { body: text }
+      text: {
+        body: text
+      }
     },
     {
       headers: {
@@ -72,7 +96,7 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  console.log("GET /webhook HIT", { mode, tokenReceived: token ? "***" : "" });
+  console.log("GET /webhook HIT");
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("Webhook verificado com sucesso.");
@@ -84,19 +108,31 @@ app.get("/webhook", (req, res) => {
 });
 
 app.post("/webhook", async (req, res) => {
-  console.log("POST /webhook HIT");
-  console.log("BODY:", JSON.stringify(req.body, null, 2));
-
   res.sendStatus(200);
 
   try {
+    console.log("POST /webhook HIT");
+    console.log("BODY:", JSON.stringify(req.body, null, 2));
+
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+
+    if (!value) {
+      console.log("Payload sem value.");
+      return;
+    }
+
+    const phoneId = safeTrim(value?.metadata?.phone_number_id);
     const message = value?.messages?.[0];
     const status = value?.statuses?.[0];
-    const phoneId = safeTrim(value?.metadata?.phone_number_id);
 
     if (status) {
-      console.log("STATUS EVENT:", JSON.stringify(status, null, 2));
+      console.log("STATUS EVENT:", {
+        status: status.status,
+        recipient_id: status.recipient_id,
+        phone_number_id: phoneId,
+        errors: status.errors || []
+      });
+      return;
     }
 
     if (!message) {
@@ -125,7 +161,7 @@ app.post("/webhook", async (req, res) => {
       phone_number_id: company.phone_number_id
     });
 
-    let reply = "Recebi sua mensagem.";
+    let reply = "Olá! Recebi sua mensagem.";
 
     if (type === "text" && text) {
       reply = `Recebi sua mensagem: ${text}`;

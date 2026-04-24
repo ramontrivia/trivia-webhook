@@ -1,6 +1,7 @@
 import { sendTextMessage } from "./whatsapp.js";
 import { getCompanyByPhoneNumber } from "./companies.js";
 import { generateResponse } from "./openai.js";
+import { saveMessage } from "./messages.js";
 
 export async function handleIncomingMessage({ body }) {
   try {
@@ -15,7 +16,7 @@ export async function handleIncomingMessage({ body }) {
 
     const message = value?.messages?.[0];
     const status = value?.statuses?.[0];
-    const phoneId = value?.metadata?.phone_number_id;
+    const phoneId = String(value?.metadata?.phone_number_id || "").trim();
 
     if (status) {
       console.log("STATUS EVENT:", {
@@ -53,8 +54,22 @@ export async function handleIncomingMessage({ body }) {
     let reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
 
     if (type === "text" && text) {
+      await saveMessage({
+        companyId: company.id,
+        from,
+        content: text,
+        role: "user"
+      });
+
       reply = await generateResponse({
         text
+      });
+
+      await saveMessage({
+        companyId: company.id,
+        from,
+        content: reply,
+        role: "assistant"
       });
     }
 

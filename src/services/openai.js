@@ -6,7 +6,12 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 export async function generateResponse({ text, company, from }) {
   try {
+    console.log("GERANDO RESPOSTA PARA:", { text, from });
+
+    // 🔥 BUSCA HISTÓRICO
     const history = await getConversationHistory({ company, from });
+
+    console.log("HISTÓRICO USADO NA IA:", history);
 
     const systemPrompt = `
 Fale em português brasileiro, de forma natural, curta e humana.
@@ -18,9 +23,11 @@ Se perguntarem com quem estão falando, diga que é Mateus Leme.
 
     const messages = [
       { role: "system", content: systemPrompt },
-      ...history,
+      ...history, // 🔥 AGORA SIM usando histórico real
       { role: "user", content: text }
     ];
+
+    console.log("MESSAGES ENVIADAS PARA OPENAI:", messages);
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -37,7 +44,12 @@ Se perguntarem com quem estão falando, diga que é Mateus Leme.
       }
     );
 
-    return response.data.choices[0].message.content;
+    const reply = response.data.choices[0].message.content;
+
+    console.log("RESPOSTA IA:", reply);
+
+    return reply;
+
   } catch (error) {
     console.error("ERRO OPENAI:", error.response?.data || error.message);
     return "Desculpe, ocorreu um erro ao responder.";

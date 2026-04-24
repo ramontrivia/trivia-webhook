@@ -1,40 +1,42 @@
 import { supabase } from "./supabase.js";
 
-export async function saveMessage({
-  company,
-  from,
-  content,
-  role
-}) {
-  const { error } = await supabase
+export async function saveMessage({ company, from, content, role }) {
+  console.log("TENTANDO SALVAR MENSAGEM:", {
+    company: company?.id,
+    from,
+    content,
+    role
+  });
+
+  const { data, error } = await supabase
     .from("messages")
     .insert([
       {
-        company: company.id || null,
-        client_key: company.client_key || null,
-        company_name: company.name || null,
+        company: company?.id || null,
+        client_key: company?.client_key || null,
+        company_name: company?.name || null,
         user_phone: from,
         ditection: role,
         message: content,
+        intent: null,
         content: content,
         role: role
       }
-    ]);
+    ])
+    .select();
 
   if (error) {
-    console.error("Erro ao salvar mensagem:", {
+    console.error("ERRO AO SALVAR MENSAGEM:", {
       message: error.message,
       details: error.details,
       hint: error.hint,
       code: error.code
     });
+
     return false;
   }
 
-  console.log("Mensagem salva com sucesso:", {
-    user_phone: from,
-    role
-  });
+  console.log("MENSAGEM SALVA COM SUCESSO:", data);
 
   return true;
 }

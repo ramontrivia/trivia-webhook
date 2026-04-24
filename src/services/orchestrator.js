@@ -1,3 +1,4 @@
+console.log("VERSAO NOVA DO CODIGO ATIVA");
 import { sendTextMessage } from "./whatsapp.js";
 import { getCompanyByPhoneNumber } from "./companies.js";
 import { generateResponse } from "./openai.js";

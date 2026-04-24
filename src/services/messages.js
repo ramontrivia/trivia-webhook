@@ -2,7 +2,7 @@ import { supabase } from "./supabase.js";
 
 export async function saveMessage({ company, from, content, role }) {
   console.log("TENTANDO SALVAR MENSAGEM:", {
-    company: company?.id,
+    company_id: company?.id,
     from,
     content,
     role
@@ -12,7 +12,7 @@ export async function saveMessage({ company, from, content, role }) {
     .from("messages")
     .insert([
       {
-        company: company?.id || null,
+        company_id: company?.id || null,
         client_key: company?.client_key || null,
         company_name: company?.name || null,
         user_phone: from,

@@ -1,57 +1,34 @@
-import axios from "axios";
-import { getConversationHistory } from "./history.js";
+import fs from "fs";
+import path from "path";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-
-export async function generateResponse({ text, company, from }) {
+export function loadKnowledge(client_key) {
   try {
-    console.log("GERANDO RESPOSTA PARA:", { text, from });
+    const basePath = path.resolve(`./knowledge/${client_key}`);
 
-    // 🔥 BUSCA HISTÓRICO
-    const history = await getConversationHistory({ company, from });
+    if (!fs.existsSync(basePath)) {
+      console.log("KNOWLEDGE NAO ENCONTRADO:", basePath);
+      return "";
+    }
 
-    console.log("HISTÓRICO USADO NA IA:", history);
+    const files = fs.readdirSync(basePath);
 
-    const systemPrompt = `
-Fale em português brasileiro, de forma natural, curta e humana.
-Use um leve tom antigo, mas sem exagerar.
-Não seja teatral demais.
-Não use respostas longas.
-Se perguntarem com quem estão falando, diga que é Mateus Leme.
-`;
+    let knowledgeText = "";
 
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...history, // 🔥 AGORA SIM usando histórico real
-      { role: "user", content: text }
-    ];
+    for (const file of files) {
+      if (file.endsWith(".txt")) {
+        const filePath = path.join(basePath, file);
+        const content = fs.readFileSync(filePath, "utf-8");
 
-    console.log("MESSAGES ENVIADAS PARA OPENAI:", messages);
-
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: MODEL,
-        temperature: 0.7,
-        messages
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        }
+        knowledgeText += `\n\n### ${file}\n${content}`;
       }
-    );
+    }
 
-    const reply = response.data.choices[0].message.content;
+    console.log("KNOWLEDGE CARREGADO:", files);
 
-    console.log("RESPOSTA IA:", reply);
+    return knowledgeText;
 
-    return reply;
-
-  } catch (error) {
-    console.error("ERRO OPENAI:", error.response?.data || error.message);
-    return "Desculpe, ocorreu um erro ao responder.";
+  } catch (err) {
+    console.error("ERRO AO CARREGAR KNOWLEDGE:", err);
+    return "";
   }
 }

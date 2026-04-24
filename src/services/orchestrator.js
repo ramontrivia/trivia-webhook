@@ -1,5 +1,6 @@
 import { sendTextMessage } from "./whatsapp.js";
 import { getCompanyByPhoneNumber } from "./companies.js";
+import { generateResponse } from "./openai.js";
 
 export async function handleIncomingMessage({ body }) {
   try {
@@ -13,31 +14,49 @@ export async function handleIncomingMessage({ body }) {
     }
 
     const message = value?.messages?.[0];
+    const status = value?.statuses?.[0];
     const phoneId = value?.metadata?.phone_number_id;
+
+    if (status) {
+      console.log("STATUS EVENT:", {
+        status: status.status,
+        recipient_id: status.recipient_id,
+        phone_number_id: phoneId,
+        errors: status.errors || []
+      });
+      return;
+    }
 
     if (!message) {
       console.log("Sem mensagem");
       return;
     }
 
-    const from = message.from;
-    const text = message.text?.body;
+    const from = String(message.from || "").trim();
+    const type = String(message.type || "").trim();
+    const text = String(message.text?.body || "").trim();
 
     console.log("Nova mensagem:", {
       from,
+      type,
       text,
       phoneId
     });
 
-    // 🔥 BUSCAR EMPRESA REAL
     const company = await getCompanyByPhoneNumber(phoneId);
 
     if (!company) {
-      console.log("Empresa nao encontrada");
+      console.log("Empresa nao encontrada para phone_number_id:", phoneId);
       return;
     }
 
-    const reply = `Recebi: ${text}`;
+    let reply = "Recebi sua mensagem, mas esse tipo ainda nao esta configurado.";
+
+    if (type === "text" && text) {
+      reply = await generateResponse({
+        text
+      });
+    }
 
     await sendTextMessage({
       company,
@@ -46,6 +65,10 @@ export async function handleIncomingMessage({ body }) {
     });
 
   } catch (err) {
-    console.error("Erro no orchestrator:", err.message);
+    console.error("Erro no orchestrator:", {
+      message: err?.message,
+      status: err?.response?.status,
+      data: err?.response?.data
+    });
   }
 }

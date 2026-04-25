@@ -8,7 +8,7 @@ export async function saveMessage({
 }) {
   try {
     console.log("SALVANDO MENSAGEM:", {
-      company: company?.id,
+      company_id: company?.id,
       from,
       content,
       role
@@ -18,11 +18,11 @@ export async function saveMessage({
       .from("messages")
       .insert([
         {
-          company: company?.id || null, // ✅ CORRETO
+          company_id: company?.id || null,
           client_key: company?.client_key || null,
           company_name: company?.name || null,
           user_phone: from,
-          ditection: role, // ✅ usa o nome EXATO da sua coluna
+          direction: role,
           message: content,
           role: role,
           intent: null
@@ -31,7 +31,13 @@ export async function saveMessage({
       .select();
 
     if (error) {
-      console.error("ERRO AO SALVAR:", error);
+      console.error("ERRO AO SALVAR:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+
       return false;
     }
 

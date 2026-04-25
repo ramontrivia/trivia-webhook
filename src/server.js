@@ -1,5 +1,6 @@
 import express from "express";
 import webhookRoutes from "./routes/webhook.js";
+import adminRoutes from "./routes/admin.js";
 
 const app = express();
 
@@ -11,8 +12,8 @@ app.get("/", (req, res) => {
   res.status(200).send("OK");
 });
 
-// 🔥 IMPORTANTE: TODAS AS REQUISIÇÕES PASSAM PELO WEBHOOK
 app.use("/", webhookRoutes);
+app.use("/", adminRoutes);
 
 app.listen(PORT, () => {
   console.log("SERVER RUNNING ON PORT:", PORT);

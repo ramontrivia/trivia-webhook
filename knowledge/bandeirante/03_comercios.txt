@@ -26,19 +26,7 @@ REGRAS PARA USAR ESTA BASE:
 
 Use as categorias abaixo para responder.
 
-EXEMPLO DE RESPOSTA:
 
-"Tenho sim. Aqui na cidade encontrei estas opções:
-
-DROGA REDE
-Tel: 3535-1222
-Praça Benedito Valadares, 186 – Centro
-
-DROGAMAXI
-Tel: 2342-1800
-Av. Padre Vilaça, 526 – Centro
-
-Se quiser, posso te passar mais opções também."
 
 REGRA PARA QUANDO NÃO ENCONTRAR UM COMÉRCIO OU TELEFONE
 
@@ -66,261 +54,401 @@ Quando o usuário pedir uma categoria, listar os comércios daquela categoria co
 Quando houver mais de um telefone, mostrar todos.
 Quando o telefone parecer incompleto, não completar por conta própria.
 Se não encontrar a categoria ou comércio, responder: 'Não encontrei esse comércio/categoria na base disponível.'
-Academias
-ACADEMIA SUPORTE — Tel.: 3535.2268
-GOLDEN CAMP MUAY THAI — Tel.: 99640.4321
-STUDIO ARI PILATES E FUNCIONAL — Tel.: 99065.1224
-CENTRO DE TREINAMENTO SENA FIGHT TEAM — Tel.: 99584.1143
-CROSSFIT MATEUS LEME — Tel.: 99955.9180
-STUDIO ATEEM PILATES E FISIOTERAPIA — Tel.: 3138.1515
-Advogados
-MOREIRA DINIZ ADVOGADOS — Tel.: 3535.1671
-DR. DELBER ANTÔNIO M. DINIZ — Tel.: 99135.8428
-DRA. MARIA MARTINELLI M. DINIZ — Tel.: 99255.2681
-DR. ALEXANDRE RODRIGUES SIQUEIRA — Tel.: 99795.4396
-Aluguel de Mesas
-M&V FESTAS E LOCAÇÃO DE BRINQUEDOS — Tel.: 99502.2755
-ALUGAR LOCAÇÃO — Tel.: 3535.2059
-Aquecedor Solar
-BYPASS ENERGIA SOLAR — Tel.: 3535.1105
-Artigos para Pesca
-POINT DO PESCADOR — Tel.: 99089.0421
-Auto Peças
-SANTERO AUTO PEÇAS — Tel.: 3535.2624
-Açougue
-CENTRAL DA CARNE — Tel.: 3535.3286
-CASA DE CARNES PADRE VILAÇA — Tel.: 3535.2908
-CASA DE CARNES MATEUS LEME — Tel.: 3535.3286
-Barbearia
-BARBEARIA THE ART — Tel.: 99485.6225
-SANTOS BARBEARIA — Tel.: 98400.8621
-Bicicletas
-PRÓ BIKE — Tel.: 3535.2368
-Borracharia
-BORRACHARIA ROTA 050 — Tel.: 99963.0414
-BORRACHARIA CARLIN PINHEIROS — Tel.: 99306.6881
-Brinquedos
-M&V FESTAS LOCAÇÃO DE BRINQUEDOS E PERSONALIZADOS — Tel.: 99502.2755
-Buffet e Festas
-BUFFET DEGUST — Tel.: 99787.9675 / 3535.1990
-Capina e Poda
-SOL JARDINAGEM — Tel.: 98102.3045
-TIAOZIN JARDINAGEM — Tel.: 99763.7065
-CANTINHO DA LIMPEZA — Tel.: 99605.3277
-SILVA - LIMPA LOTE — Tel.: 99956.7225
-Carretos
-EXPRESSO UNIÃO — Tel.: 99800.8790
-Casa de Ração
-RAÇÕES PADRE VILAÇA — Tel.: 3535.1914
-IMPERATRIZ CASA DE RAÇÃO — Tel.: 98227.7661
-Casa de Tintas
-LUIDAR — Tel.: 3535.4103
-CLUBE DAS TINTAS — Tel.: 3535.2282
-Caçambas
-L&A CAÇAMBAS — Tel.: 99219.2576
-Celulares
-CM MANUTENÇÃO DE CELULARES — Tel.: 99745.9857
-Cuidador e Babá
-GRAZY CUIDADORA — Tel.: 99841.7041
-Decoração Festas
-THAYS FESTAS — Tel.: 99812.3797
-Depilação
-ESPAÇO SOCORRO RODRIGUES — Tel.: 97177.0091
-Desentupidora
-MINAS LIMP — Tel.: 3428.3900 / 99951.5573
-Despachante
-WOLVINHO DESPACHANTE — Tel.: 3535.1018
-VININHO DESPACHANTE — Tel.: 3535.1650
-AG DESPACHANTE DANIEL — Tel.: 99761.4373
-Diarista
-MEDEIROS - FAXINEIRA — Tel.: 99065.2886
-Distribuidora de Bebidas
-EMPÓRIO BEER DISTRIBUIDORA — Tel.: 99688.0841
-Doces e Bolos
-DELICIAS DA LU — Tel.: 99154.5466
-CAKE'S BOLOS E DOCES — Tel.: 99420.0449
-AMANDA CONFEITARIA — Tel.: 98247.3184
-BEBEL BOLOS E CIA — Tel.: 99802.2590
-DOCERIA DA SARAH — Tel.: 99738.6513
-KI DELÍCIAS — Tel.: 99606.3021
-LEANDRA CAKE'S DESIGN — Tel.: 99390.6797
-Eletricista
-ANDERSON ARAÚJO — Tel.: 99879.6090
-DG SOLUÇÕES ELÉTRICAS — Tel.: 99592.9791
-DAMIÃO SOLUÇÕES ELÉTRICAS — Tel.: 97167.8210
-SENHOR ELIAS — Tel.: 99609.0208
-Estamparia
-DONATELLO ESTAMPARIA — Tel.: 99635.7521
-DJD ESTAMPARIA — Tel.: 99288.3016
-Estética Automotiva
-RODRIGO CLEAN — Tel.: 3199640.9429
-Estética e Beleza
-CENTRO DE ESTÉTICA MARÍLIA SANTIAGO — Tel.: 99944.5573
-ESPAÇO RENOVA — Tel.: 97172.8354
-LR ESTÉTICA E IMAGEM PESSOAL — Tel.: 99839.2651
-DANIELA TERAPIA E ESTÉTICA — Tel.: 99797.3211
-Farmácia
-DROGA REDE — Tel.: 3535.1222 / 3535.1913
-DROGAMAX — Tel.: 2342.1800
-DROGAFARMA POPULAR — Tel.: 995671301
-REMEDIAR — Tel.: 3535.4242
-Ferro Velho
-JVB RECICLAGEM — Tel.: 99666.2745
-FERVELATOR — Tel.: 3535.1174
-Floricultura
-PARAÍSO DAS FLORES — Tel.: 9071.3312
-Freio e Suspensão
-CHECK UP AUTO MECÂNICA — Tel.: 98923.1509
-JARDEL AUTO CENTER — Tel.: 3535.2585
-Funerária
-JADAPAX — Tel.: 99933.3873
-Gesso e Acabamentos
-CONSTRUSAR ACABAMENTOS — Tel.: 2118.0324
-ABC DA CONSTRUÇÃO — Tel.: 3138.1020
-MARTINELLI — Tel.: 3535.1544
-Gráfica
-GRÁFICA MALU — Tel.: 3535.1333
-VISART DESIGN COMUNICAÇÃO VISUAL — Tel.: 3535.1799
-Informática
-393 INFORMÁTICA — Tel.: 3535.2939
-INFO TONNER — Tel.: 3535.2976
-I9 INFORMÁTICA MULTISERVICE — Tel.: 988739153
-Instrumentos
-O PODER DO SOM — Tel.: 99647.4798
-Internet
-GOX INTERNET — Tel.: 0800 200 3500
-UNIVERSO TECNOLOGIA — Tel.: 0800 009 0004
-NEWNET TECNOLOGIA E PROJETOS — Tel.: 3535.2805
-SEMPRE INTERNET — Tel.: 0800 300 0800
-Jardinagem
-SOL JARDINAGEM — Tel.: 98102.3045
-Lanternagem e Pintura
-ET LANTERNAGEM - RENATO — Tel.: 99129.2490
-Lava a Jato Automotivo
-RODRIGO CLEAN — Tel.: 3199640.9429
-STUDIO LEO DIAS — Tel.: 99985.0909
-Limpeza e Higienização
-LP RODRIGUES HIGIENIZAÇÃO — Tel.: 99621.4357
-SALES CLEAN — Tel.: 97148.4764
-JULIOS CLEAN — Tel.: 99329.8010
-CASA NOVA LIMPEZA E IMPERMEABILIZAÇÃO — Tel.: 3138.2783
-Manicure e Pedicure
-CANTINHO DA GREYZI — Tel.: 99649.1570
-IS CONCEPT — Tel.: 3535.2542
-STUDIO MARIA CLARA — Tel.: 98243.6487
-Maquiagem e Cosméticos
-BATOM COSMÉTICOS — Tel.: 99969.2120
-Marcenaria
-MARCENARIA TORRES — Tel.: 99656.6603
-ELIEZER MÓVEIS PLANEJADOS — Tel.: 99519.3158
-Material Elétrico
-DEPÓSITO KAKA — Tel.: 3535.1289 / 99736.8970
-ELETRO AMARAL — Tel.: 3535.3690
-PONTO DA LUZ — Tel.: 3535.2629
-ENERGIA PADRÃO — Tel.: 3535.2869
-NOVO LAR — Tel.: 3535.3826
-Moda Feminina e Masculina
-TOQUE DE SEDUÇÃO — Tel.: 9936.6337
-OPÇÃO 10 — Tel.: 99867.8348
-EXCLUSIVA MODA E CASA — Tel.: 98212.2586
-GERA MODAS — Tel.: 3535.1473
-PINGO'S MODA — Tel.: 3535.1591
-BRASIL VESTE — Tel.: 99146.5471
-Motos
-ILDI MOTOS — Tel.: 97160.9898
-CARECA MOTOS — Tel.: 97155.6736
-ACG MOTOS E AUTOS — Tel.: 99106.6800
-Móveis e Eletros
-CASA CAMARGOS — Tel.: 3535.2711
-LÍDER INTERIORES — Tel.: 3535.1798
-Oficina Mecânica
-CHECK UP AUTO MECÂNICA — Tel.: 98923.1509
-OFICINA ALCIDES — Tel.: 3535.2438
-DG AUTO CENTER — Tel.: 97350.5586
-OFICINA DO JAIRINHO — Tel.: 98896.8878
-DW CENTRO AUTOMOTIVO — Tel.: 99659.3065
-Padaria
-PANIFICADORA C&E — Tel.: 3535.2066
-PADARIA E CONFEITARIA CRAVO E CANELA — Tel.: 3535.1029
-Papelaria
-PAPELARIA BRUNA — Tel.: 98389.0364
-PAPELARIA VANELLI — Tel.: 3535.1795
-FUTURA PAPELARIA — Tel.: 3535.1275
-PRIMU'S PAPELARIA — Tel.: 3535.3208
-Pedreiro
-DEIVID MICAEL — Tel.: 8942.9085
-JOSUÉ — Tel.: 97213.3887
-MÁRCIO — Tel.: 99662.6631
-Personalizados
-FLÁVIA SANTOS PERSONALIZADOS — Tel.: 99942.0973
-LOURDES PAPER — Tel.: 99990.2668
-KAKÁ ESTAMPAS — Tel.: 99550.1302
-Piscinas
-UAI PISCINAS — Tel.: 92009.3281
-PALACE SPA E PISCINAS — Tel.: 9912.0806
-Produtos de Limpeza
-LIMPAR PRODUTOS DE LIMPEZA — Tel.: 99921.6683
-BIOQUIM PRODUTOS DE LIMPEZA — Tel.: 99132.1148
-Proteção Veicular
-ACERTT PROTEÇÃO VEICULAR — Tel.: 3138.0980 / 99821.5011
-Refrigeração
-HR REFRIGERAÇÃO — Tel.: 99868.6551
-REFRIGERAÇÃO JM — Tel.: 97520.1455
-POLARIS REFRIGERAÇÃO — Tel.: 98403.9405
-ASSISTEC GÁS E ELETROS — Tel.: 99135.3626
-REFRIGERAÇÃO GLOBO — Tel.: 3535.2316
-Salão de Beleza
-SALÃO DA APARECIDA — Tel.: 99632.1872
-IS CONCEPT — Tel.: 3535.2542
-SALÃO PURO GLAMOUR — Tel.: 99908.7983
-STUDIO ANA DELAS — Tel.: 99845.8873
-BELEZA POPULAR — Tel.: 99639.0011
-Serralheria
-SERRALHERIA SÃO MATEUS — Tel.: 98922.2332
-SERRALHERIA — Tel.: 99725.6851
-GIRAFER — Tel.: 3535.2754
-SERRALHERIA MESCOLIM — Tel.: 99564.8385
-SERRALHERIA FERRUGEM — Tel.: 99562.2504
-Tattoo
-ESTÚDIO BILU — Tel.: 99857.2200
-JESSICA SAVIGNON TATTOO STUDIO — Tel.: 99233.5574
-STUDIO FERNANDO COSTA — Tel.: 98449.4989
-SMOKE TATTOO — Tel.: 99253.1240
-Tecidos e Armarinho
-STYLLUS TECIDOS E AVIAMENTOS — Tel.: 99770.5526
-ARMARINHO PEIXOTO — Tel.: 97172.3480
-LIECI ARMARINHOS E AVIAMENTOS — Tel.: 97179.4188
-Topa Tudo
-TOPA TUDO DO BRUNO — Tel.: 97234.2624
-TOPA TUDO SANTO ANTÔNIO — Tel.: 99689.3377
-ASTRAL TOPA TUDO — Tel.: 99914.2309
-Transporte Escolar
-CHARLES CARNEIRO VITAL — Tel.: 99646.3031
-RANY MOREIRA — Tel.: 97162.0124
-KARINE TRANSPORTES — Tel.: 97309.3305
-GERALDA BATISTA — Tel.: 3988.2574
-LELIS TRANSPORTES — Tel.: 3311.8111
-ELIANA MARIA DINIZ — Tel.: 3523.1058
-VIVIANE VITAL — Tel.: 99744.5603
-Veterinária / Pet
-CLÍNICA SÃO JUDAS TADEU — Tel.: 99969.6176
-COMERCIAL SANTO ANTÔNIO VETERINÁRIA — Tel.: 3535.2874
-PET LAND — Tel.: 99996.1010
-PET SHOP ANIMAL — Tel.: 99505.0391
-EMPÓRIO PET AGRO — Tel.: 99270.9814
-CASA RURAL — Tel.: 99524.4567
-VET'S HOME — Tel.: 99595.8244
-Veículos
-AVENIDA VEÍCULOS — Tel.: 3535.1250
-TREVÃO VEÍCULOS — Tel.: 99948.0235
-NOGUEIRA VEÍCULOS — Tel.: 99690.7524
-MIGUEL VEÍCULOS — Tel.: 3535.1443
-ACG MOTOS E AUTOS — Tel.: 3535.2958 / 99106.6800
-LYCAR VEÍCULOS — Tel.: 99468.5167
-Vidraçaria
-VIDROLAR FC — Tel.: 3535.1700
-VIDRAÇARIA VIDRAÇA — Tel.: 3535.2377
-VIDRAÇARIA — Tel.: 97161.2618
-Ótica
-ÓTICA SILVA SOARES — Tel.: 5535.2084
-ÓTICA DA CIDA — Tel.: 3138.1015
+
+[CATEGORIA: Academias]
+SINONIMOS: academia, academias, treino, musculação, pilates, funcional, crossfit, luta, muay thai
+- ACADEMIA SUPORTE — Tel.: 3535.2268
+- GOLDEN CAMP MUAY THAI — Tel.: 99640.4321
+- STUDIO ARI PILATES E FUNCIONAL — Tel.: 99065.1224
+- CENTRO DE TREINAMENTO SENA FIGHT TEAM — Tel.: 99584.1143
+- CROSSFIT MATEUS LEME — Tel.: 99955.9180
+- STUDIO ATEEM PILATES E FISIOTERAPIA — Tel.: 3138.1515
+
+[CATEGORIA: Advogados]
+SINONIMOS: advogado, advogados, advocacia, jurídico, jurídica
+- MOREIRA DINIZ ADVOGADOS — Tel.: 3535.1671
+- DR. DELBER ANTÔNIO M. DINIZ — Tel.: 99135.8428
+- DRA. MARIA MARTINELLI M. DINIZ — Tel.: 99255.2681
+- DR. ALEXANDRE RODRIGUES SIQUEIRA — Tel.: 99795.4396
+
+[CATEGORIA: Aluguel de Mesas]
+SINONIMOS: aluguel de mesas, mesas, locação de mesas, festas, aluguel para festa
+- M&V FESTAS E LOCAÇÃO DE BRINQUEDOS — Tel.: 99502.2755
+- ALUGAR LOCAÇÃO — Tel.: 3535.2059
+
+[CATEGORIA: Aquecedor Solar]
+SINONIMOS: aquecedor solar, energia solar, aquecedor, solar
+- BYPASS ENERGIA SOLAR — Tel.: 3535.1105
+
+[CATEGORIA: Artigos para Pesca]
+SINONIMOS: pesca, pescador, artigos para pesca, loja de pesca
+- POINT DO PESCADOR — Tel.: 99089.0421
+
+[CATEGORIA: Auto Peças]
+SINONIMOS: auto peças, autopeças, peça de carro, peças para carro, peças automotivas
+- SANTERO AUTO PEÇAS — Tel.: 3535.2624
+
+[CATEGORIA: Açougue]
+SINONIMOS: açougue, açougues, carne, carnes, casa de carnes
+- CENTRAL DA CARNE — Tel.: 3535.3286
+- CASA DE CARNES PADRE VILAÇA — Tel.: 3535.2908
+- CASA DE CARNES MATEUS LEME — Tel.: 3535.3286
+
+[CATEGORIA: Barbearia]
+SINONIMOS: barbearia, barbeiro, corte masculino, cabelo masculino, barba
+- BARBEARIA THE ART — Tel.: 99485.6225
+- SANTOS BARBEARIA — Tel.: 98400.8621
+
+[CATEGORIA: Bicicletas]
+SINONIMOS: bicicleta, bicicletas, bike, bikes, oficina de bicicleta
+- PRÓ BIKE — Tel.: 3535.2368
+
+[CATEGORIA: Borracharia]
+SINONIMOS: borracharia, borracharias, pneu, pneus, conserto de pneu
+- BORRACHARIA ROTA 050 — Tel.: 99963.0414
+- BORRACHARIA CARLIN PINHEIROS — Tel.: 99306.6881
+
+[CATEGORIA: Brinquedos]
+SINONIMOS: brinquedos, aluguel de brinquedos, brinquedo, festa infantil
+- M&V FESTAS LOCAÇÃO DE BRINQUEDOS E PERSONALIZADOS — Tel.: 99502.2755
+
+[CATEGORIA: Buffet e Festas]
+SINONIMOS: buffet, festas, evento, eventos, festa
+- BUFFET DEGUST — Tel.: 99787.9675 / 3535.1990
+
+[CATEGORIA: Capina e Poda]
+SINONIMOS: capina, poda, jardinagem, limpar lote, limpeza de lote, lote
+- SOL JARDINAGEM — Tel.: 98102.3045
+- TIAOZIN JARDINAGEM — Tel.: 99763.7065
+- CANTINHO DA LIMPEZA — Tel.: 99605.3277
+- SILVA - LIMPA LOTE — Tel.: 99956.7225
+
+[CATEGORIA: Carretos]
+SINONIMOS: carreto, carretos, frete, mudança, transporte
+- EXPRESSO UNIÃO — Tel.: 99800.8790
+
+[CATEGORIA: Casa de Ração]
+SINONIMOS: casa de ração, ração, rações, pet, animal, cachorro, gato
+- RAÇÕES PADRE VILAÇA — Tel.: 3535.1914
+- IMPERATRIZ CASA DE RAÇÃO — Tel.: 98227.7661
+
+[CATEGORIA: Casa de Tintas]
+SINONIMOS: casa de tintas, tintas, tinta, pintura
+- LUIDAR — Tel.: 3535.4103
+- CLUBE DAS TINTAS — Tel.: 3535.2282
+
+[CATEGORIA: Caçambas]
+SINONIMOS: caçamba, caçambas, entulho, retirada de entulho
+- L&A CAÇAMBAS — Tel.: 99219.2576
+
+[CATEGORIA: Celulares]
+SINONIMOS: celular, celulares, manutenção de celular, conserto de celular, assistência celular
+- CM MANUTENÇÃO DE CELULARES — Tel.: 99745.9857
+
+[CATEGORIA: Cuidador e Babá]
+SINONIMOS: cuidador, cuidadora, babá, baba, cuidados
+- GRAZY CUIDADORA — Tel.: 99841.7041
+
+[CATEGORIA: Decoração Festas]
+SINONIMOS: decoração de festas, decoração, festa, festas
+- THAYS FESTAS — Tel.: 99812.3797
+
+[CATEGORIA: Depilação]
+SINONIMOS: depilação, depiladora, estética, beleza
+- ESPAÇO SOCORRO RODRIGUES — Tel.: 97177.0091
+
+[CATEGORIA: Desentupidora]
+SINONIMOS: desentupidora, desentupir, encanamento, entupimento
+- MINAS LIMP — Tel.: 3428.3900 / 99951.5573
+
+[CATEGORIA: Despachante]
+SINONIMOS: despachante, documento, documentos, veículo, veículos
+- WOLVINHO DESPACHANTE — Tel.: 3535.1018
+- VININHO DESPACHANTE — Tel.: 3535.1650
+- AG DESPACHANTE DANIEL — Tel.: 99761.4373
+
+[CATEGORIA: Diarista]
+SINONIMOS: diarista, faxina, faxineira, limpeza
+- MEDEIROS - FAXINEIRA — Tel.: 99065.2886
+
+[CATEGORIA: Distribuidora de Bebidas]
+SINONIMOS: distribuidora de bebidas, bebidas, cerveja, bebida
+- EMPÓRIO BEER DISTRIBUIDORA — Tel.: 99688.0841
+
+[CATEGORIA: Doces e Bolos]
+SINONIMOS: doces, bolos, bolo, confeitaria, doce, sobremesa
+- DELICIAS DA LU — Tel.: 99154.5466
+- CAKE'S BOLOS E DOCES — Tel.: 99420.0449
+- AMANDA CONFEITARIA — Tel.: 98247.3184
+- BEBEL BOLOS E CIA — Tel.: 99802.2590
+- DOCERIA DA SARAH — Tel.: 99738.6513
+- KI DELÍCIAS — Tel.: 99606.3021
+- LEANDRA CAKE'S DESIGN — Tel.: 99390.6797
+
+[CATEGORIA: Eletricista]
+SINONIMOS: eletricista, elétrica, serviço elétrico, energia
+- ANDERSON ARAÚJO — Tel.: 99879.6090
+- DG SOLUÇÕES ELÉTRICAS — Tel.: 99592.9791
+- DAMIÃO SOLUÇÕES ELÉTRICAS — Tel.: 97167.8210
+- SENHOR ELIAS — Tel.: 99609.0208
+
+[CATEGORIA: Estamparia]
+SINONIMOS: estamparia, estampa, estampas, impressão
+- DONATELLO ESTAMPARIA — Tel.: 99635.7521
+- DJD ESTAMPARIA — Tel.: 99288.3016
+
+[CATEGORIA: Estética Automotiva]
+SINONIMOS: estética automotiva, lavagem, lava jato, polimento, limpeza de carro
+- RODRIGO CLEAN — Tel.: 3199640.9429
+
+[CATEGORIA: Estética e Beleza]
+SINONIMOS: estética, beleza, limpeza de pele, procedimento estético
+- CENTRO DE ESTÉTICA MARÍLIA SANTIAGO — Tel.: 99944.5573
+- ESPAÇO RENOVA — Tel.: 97172.8354
+- LR ESTÉTICA E IMAGEM PESSOAL — Tel.: 99839.2651
+- DANIELA TERAPIA E ESTÉTICA — Tel.: 99797.3211
+
+[CATEGORIA: Farmácia]
+SINONIMOS: farmácia, farmácias, drogaria, drogarias, remédio, medicamento
+- DROGA REDE — Tel.: 3535.1222 / 3535.1913
+- DROGAMAX — Tel.: 2342.1800
+- DROGAFARMA POPULAR — Tel.: 995671301
+- REMEDIAR — Tel.: 3535.4242
+
+[CATEGORIA: Ferro Velho]
+SINONIMOS: ferro velho, reciclagem, sucata
+- JVB RECICLAGEM — Tel.: 99666.2745
+- FERVELATOR — Tel.: 3535.1174
+
+[CATEGORIA: Floricultura]
+SINONIMOS: floricultura, flores, flor
+- PARAÍSO DAS FLORES — Tel.: 9071.3312
+
+[CATEGORIA: Freio e Suspensão]
+SINONIMOS: freio, suspensão, mecânica, oficina, auto center
+- CHECK UP AUTO MECÂNICA — Tel.: 98923.1509
+- JARDEL AUTO CENTER — Tel.: 3535.2585
+
+[CATEGORIA: Funerária]
+SINONIMOS: funerária, funeral, velório
+- JADAPAX — Tel.: 99933.3873
+
+[CATEGORIA: Gesso e Acabamentos]
+SINONIMOS: gesso, acabamentos, construção, material de construção
+- CONSTRUSAR ACABAMENTOS — Tel.: 2118.0324
+- ABC DA CONSTRUÇÃO — Tel.: 3138.1020
+- MARTINELLI — Tel.: 3535.1544
+
+[CATEGORIA: Gráfica]
+SINONIMOS: gráfica, impressão, comunicação visual, design
+- GRÁFICA MALU — Tel.: 3535.1333
+- VISART DESIGN COMUNICAÇÃO VISUAL — Tel.: 3535.1799
+
+[CATEGORIA: Informática]
+SINONIMOS: informática, computador, notebook, manutenção de computador, toner
+- 393 INFORMÁTICA — Tel.: 3535.2939
+- INFO TONNER — Tel.: 3535.2976
+- I9 INFORMÁTICA MULTISERVICE — Tel.: 988739153
+
+[CATEGORIA: Instrumentos]
+SINONIMOS: instrumentos, som, música, instrumento musical
+- O PODER DO SOM — Tel.: 99647.4798
+
+[CATEGORIA: Internet]
+SINONIMOS: internet, provedor, wifi, tecnologia
+- GOX INTERNET — Tel.: 0800 200 3500
+- UNIVERSO TECNOLOGIA — Tel.: 0800 009 0004
+- NEWNET TECNOLOGIA E PROJETOS — Tel.: 3535.2805
+- SEMPRE INTERNET — Tel.: 0800 300 0800
+
+[CATEGORIA: Jardinagem]
+SINONIMOS: jardinagem, jardim, poda, capina
+- SOL JARDINAGEM — Tel.: 98102.3045
+
+[CATEGORIA: Lanternagem e Pintura]
+SINONIMOS: lanternagem, pintura automotiva, funilaria
+- ET LANTERNAGEM - RENATO — Tel.: 99129.2490
+
+[CATEGORIA: Lava a Jato Automotivo]
+SINONIMOS: lava jato, lavagem automotiva, limpeza automotiva, estética automotiva
+- RODRIGO CLEAN — Tel.: 3199640.9429
+- STUDIO LEO DIAS — Tel.: 99985.0909
+
+[CATEGORIA: Limpeza e Higienização]
+SINONIMOS: limpeza, higienização, impermeabilização, limpeza de sofá, limpeza de estofado
+- LP RODRIGUES HIGIENIZAÇÃO — Tel.: 99621.4357
+- SALES CLEAN — Tel.: 97148.4764
+- JULIOS CLEAN — Tel.: 99329.8010
+- CASA NOVA LIMPEZA E IMPERMEABILIZAÇÃO — Tel.: 3138.2783
+
+[CATEGORIA: Manicure e Pedicure]
+SINONIMOS: manicure, pedicure, unha, unhas
+- CANTINHO DA GREYZI — Tel.: 99649.1570
+- IS CONCEPT — Tel.: 3535.2542
+- STUDIO MARIA CLARA — Tel.: 98243.6487
+
+[CATEGORIA: Maquiagem e Cosméticos]
+SINONIMOS: maquiagem, cosméticos, beleza, batom
+- BATOM COSMÉTICOS — Tel.: 99969.2120
+
+[CATEGORIA: Marcenaria]
+SINONIMOS: marcenaria, móveis planejados, móveis, marceneiro
+- MARCENARIA TORRES — Tel.: 99656.6603
+- ELIEZER MÓVEIS PLANEJADOS — Tel.: 99519.3158
+
+[CATEGORIA: Material Elétrico]
+SINONIMOS: material elétrico, elétrica, materiais elétricos, luz, energia
+- DEPÓSITO KAKA — Tel.: 3535.1289 / 99736.8970
+- ELETRO AMARAL — Tel.: 3535.3690
+- PONTO DA LUZ — Tel.: 3535.2629
+- ENERGIA PADRÃO — Tel.: 3535.2869
+- NOVO LAR — Tel.: 3535.3826
+
+[CATEGORIA: Moda Feminina e Masculina]
+SINONIMOS: moda, roupas, roupa, loja de roupa, moda feminina, moda masculina
+- TOQUE DE SEDUÇÃO — Tel.: 9936.6337
+- OPÇÃO 10 — Tel.: 99867.8348
+- EXCLUSIVA MODA E CASA — Tel.: 98212.2586
+- GERA MODAS — Tel.: 3535.1473
+- PINGO'S MODA — Tel.: 3535.1591
+- BRASIL VESTE — Tel.: 99146.5471
+
+[CATEGORIA: Motos]
+SINONIMOS: motos, moto, oficina de moto, peças de moto
+- ILDI MOTOS — Tel.: 97160.9898
+- CARECA MOTOS — Tel.: 97155.6736
+- ACG MOTOS E AUTOS — Tel.: 99106.6800
+
+[CATEGORIA: Móveis e Eletros]
+SINONIMOS: móveis, eletros, eletrodomésticos, móveis e eletros
+- CASA CAMARGOS — Tel.: 3535.2711
+- LÍDER INTERIORES — Tel.: 3535.1798
+
+[CATEGORIA: Oficina Mecânica]
+SINONIMOS: oficina mecânica, mecânica, mecânico, auto center, carro
+- CHECK UP AUTO MECÂNICA — Tel.: 98923.1509
+- OFICINA ALCIDES — Tel.: 3535.2438
+- DG AUTO CENTER — Tel.: 97350.5586
+- OFICINA DO JAIRINHO — Tel.: 98896.8878
+- DW CENTRO AUTOMOTIVO — Tel.: 99659.3065
+
+[CATEGORIA: Padaria]
+SINONIMOS: padaria, panificadora, pão, confeitaria
+- PANIFICADORA C&E — Tel.: 3535.2066
+- PADARIA E CONFEITARIA CRAVO E CANELA — Tel.: 3535.1029
+
+[CATEGORIA: Papelaria]
+SINONIMOS: papelaria, material escolar, escola, escritório
+- PAPELARIA BRUNA — Tel.: 98389.0364
+- PAPELARIA VANELLI — Tel.: 3535.1795
+- FUTURA PAPELARIA — Tel.: 3535.1275
+- PRIMU'S PAPELARIA — Tel.: 3535.3208
+
+[CATEGORIA: Pedreiro]
+SINONIMOS: pedreiro, construção, obra, reforma
+- DEIVID MICAEL — Tel.: 8942.9085
+- JOSUÉ — Tel.: 97213.3887
+- MÁRCIO — Tel.: 99662.6631
+
+[CATEGORIA: Personalizados]
+SINONIMOS: personalizados, lembrancinhas, estampas, papelaria personalizada
+- FLÁVIA SANTOS PERSONALIZADOS — Tel.: 99942.0973
+- LOURDES PAPER — Tel.: 99990.2668
+- KAKÁ ESTAMPAS — Tel.: 99550.1302
+
+[CATEGORIA: Piscinas]
+SINONIMOS: piscina, piscinas, spa
+- UAI PISCINAS — Tel.: 92009.3281
+- PALACE SPA E PISCINAS — Tel.: 9912.0806
+
+[CATEGORIA: Produtos de Limpeza]
+SINONIMOS: produtos de limpeza, limpeza, produto de limpeza
+- LIMPAR PRODUTOS DE LIMPEZA — Tel.: 99921.6683
+- BIOQUIM PRODUTOS DE LIMPEZA — Tel.: 99132.1148
+
+[CATEGORIA: Proteção Veicular]
+SINONIMOS: proteção veicular, seguro, associação veicular
+- ACERTT PROTEÇÃO VEICULAR — Tel.: 3138.0980 / 99821.5011
+
+[CATEGORIA: Refrigeração]
+SINONIMOS: refrigeração, ar condicionado, geladeira, freezer, gás
+- HR REFRIGERAÇÃO — Tel.: 99868.6551
+- REFRIGERAÇÃO JM — Tel.: 97520.1455
+- POLARIS REFRIGERAÇÃO — Tel.: 98403.9405
+- ASSISTEC GÁS E ELETROS — Tel.: 99135.3626
+- REFRIGERAÇÃO GLOBO — Tel.: 3535.2316
+
+[CATEGORIA: Salão de Beleza]
+SINONIMOS: salão, salão de beleza, cabelo, beleza, cabeleireiro
+- SALÃO DA APARECIDA — Tel.: 99632.1872
+- IS CONCEPT — Tel.: 3535.2542
+- SALÃO PURO GLAMOUR — Tel.: 99908.7983
+- STUDIO ANA DELAS — Tel.: 99845.8873
+- BELEZA POPULAR — Tel.: 99639.0011
+
+[CATEGORIA: Serralheria]
+SINONIMOS: serralheria, portão, grade, ferro
+- SERRALHERIA SÃO MATEUS — Tel.: 98922.2332
+- SERRALHERIA — Tel.: 99725.6851
+- GIRAFER — Tel.: 3535.2754
+- SERRALHERIA MESCOLIM — Tel.: 99564.8385
+- SERRALHERIA FERRUGEM — Tel.: 99562.2504
+
+[CATEGORIA: Tattoo]
+SINONIMOS: tattoo, tatuagem, tatuador, estúdio de tatuagem
+- ESTÚDIO BILU — Tel.: 99857.2200
+- JESSICA SAVIGNON TATTOO STUDIO — Tel.: 99233.5574
+- STUDIO FERNANDO COSTA — Tel.: 98449.4989
+- SMOKE TATTOO — Tel.: 99253.1240
+
+[CATEGORIA: Tecidos e Armarinho]
+SINONIMOS: tecidos, armarinho, aviamentos, costura
+- STYLLUS TECIDOS E AVIAMENTOS — Tel.: 99770.5526
+- ARMARINHO PEIXOTO — Tel.: 97172.3480
+- LIECI ARMARINHOS E AVIAMENTOS — Tel.: 97179.4188
+
+[CATEGORIA: Topa Tudo]
+SINONIMOS: topa tudo, usados, móveis usados, compra e venda
+- TOPA TUDO DO BRUNO — Tel.: 97234.2624
+- TOPA TUDO SANTO ANTÔNIO — Tel.: 99689.3377
+- ASTRAL TOPA TUDO — Tel.: 99914.2309
+
+[CATEGORIA: Transporte Escolar]
+SINONIMOS: transporte escolar, van escolar, escolar
+- CHARLES CARNEIRO VITAL — Tel.: 99646.3031
+- RANY MOREIRA — Tel.: 97162.0124
+- KARINE TRANSPORTES — Tel.: 97309.3305
+- GERALDA BATISTA — Tel.: 3988.2574
+- LELIS TRANSPORTES — Tel.: 3311.8111
+- ELIANA MARIA DINIZ — Tel.: 3523.1058
+- VIVIANE VITAL — Tel.: 99744.5603
+
+[CATEGORIA: Veterinária / Pet]
+SINONIMOS: veterinária, veterinário, pet, pet shop, cachorro, gato, animal, clínica veterinária
+- CLÍNICA SÃO JUDAS TADEU — Tel.: 99969.6176
+- COMERCIAL SANTO ANTÔNIO VETERINÁRIA — Tel.: 3535.2874
+- PET LAND — Tel.: 99996.1010
+- PET SHOP ANIMAL — Tel.: 99505.0391
+- EMPÓRIO PET AGRO — Tel.: 99270.9814
+- CASA RURAL — Tel.: 99524.4567
+- VET'S HOME — Tel.: 99595.8244
+
+[CATEGORIA: Veículos]
+SINONIMOS: veículos, carros, carro, automóveis, venda de carro
+- AVENIDA VEÍCULOS — Tel.: 3535.1250
+- TREVÃO VEÍCULOS — Tel.: 99948.0235
+- NOGUEIRA VEÍCULOS — Tel.: 99690.7524
+- MIGUEL VEÍCULOS — Tel.: 3535.1443
+- ACG MOTOS E AUTOS — Tel.: 3535.2958 / 99106.6800
+- LYCAR VEÍCULOS — Tel.: 99468.5167
+
+[CATEGORIA: Vidraçaria]
+SINONIMOS: vidraçaria, vidro, vidros, box
+- VIDROLAR FC — Tel.: 3535.1700
+- VIDRAÇARIA VIDRAÇA — Tel.: 3535.2377
+- VIDRAÇARIA — Tel.: 97161.2618
+
+[CATEGORIA: Ótica]
+SINONIMOS: ótica, óculos, lente, lentes
+- ÓTICA SILVA SOARES — Tel.: 5535.2084
+- ÓTICA DA CIDA — Tel.: 3138.1015

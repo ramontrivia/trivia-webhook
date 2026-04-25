@@ -52,7 +52,38 @@ export async function handleIncomingMessage({ body }) {
       name: company.name
     });
 
-    let reply = "Recebi sua mensagem.";
+    let reply = "";
+
+    if (type === "audio") {
+      const audioNotice = "[Áudio recebido - ainda não processado]";
+
+      await saveMessage({
+        company,
+        from,
+        content: audioNotice,
+        role: "user"
+      });
+
+      reply =
+        "Ô meu amigo… por ora ainda não consigo ouvir áudio nessas engenhocas modernas. " +
+        "Me mande por escrito, que aí consigo te responder melhor.";
+
+      await saveMessage({
+        company,
+        from,
+        content: reply,
+        role: "assistant"
+      });
+
+      await sendTextMessage({
+        company,
+        to: from,
+        text: reply
+      });
+
+      console.log("ÁUDIO RECEBIDO - RESPOSTA PADRAO ENVIADA");
+      return;
+    }
 
     if (type === "text" && text) {
       await saveMessage({
@@ -74,7 +105,36 @@ export async function handleIncomingMessage({ body }) {
         content: reply,
         role: "assistant"
       });
+
+      await sendTextMessage({
+        company,
+        to: from,
+        text: reply
+      });
+
+      console.log("RESPOSTA ENVIADA");
+      return;
     }
+
+    const unsupportedNotice = `[Mensagem recebida do tipo ${type} - ainda não processada]`;
+
+    await saveMessage({
+      company,
+      from,
+      content: unsupportedNotice,
+      role: "user"
+    });
+
+    reply =
+      "Ô meu amigo… esse tipo de mensagem ainda não consigo entender por aqui. " +
+      "Se puder, me mande por escrito, que eu lhe respondo melhor.";
+
+    await saveMessage({
+      company,
+      from,
+      content: reply,
+      role: "assistant"
+    });
 
     await sendTextMessage({
       company,
@@ -82,7 +142,7 @@ export async function handleIncomingMessage({ body }) {
       text: reply
     });
 
-    console.log("RESPOSTA ENVIADA");
+    console.log("TIPO NAO SUPORTADO:", type);
 
   } catch (err) {
     console.error("ERRO ORCHESTRATOR:", {

@@ -12,6 +12,10 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function getMessageText(msg) {
+  return msg?.message || msg?.content || "";
+}
+
 function formatDate(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -22,27 +26,31 @@ function formatDate(value) {
 
 router.get("/admin", async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     const selectedPhone = String(req.query.phone || "").trim();
 
-    const { data: allMessages, error } = await supabase
+    const { data: recentMessages, error: recentError } = await supabase
       .from("messages")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(300);
+      .limit(500);
 
-    if (error) {
-      return res.send("Erro ao buscar mensagens: " + error.message);
+    if (recentError) {
+      return res.send("Erro ao buscar conversas: " + recentError.message);
     }
 
     const conversationsMap = new Map();
 
-    for (const msg of allMessages || []) {
+    for (const msg of recentMessages || []) {
       const phone = msg.user_phone || "sem telefone";
 
       if (!conversationsMap.has(phone)) {
         conversationsMap.set(phone, {
           phone,
-          lastMessage: msg.message || "",
+          lastMessage: getMessageText(msg),
           lastRole: msg.role || "",
           lastDate: msg.created_at || "",
           count: 0
@@ -56,13 +64,27 @@ router.get("/admin", async (req, res) => {
 
     const currentPhone = selectedPhone || conversations[0]?.phone || "";
 
-    const selectedMessages = (allMessages || [])
-      .filter((msg) => String(msg.user_phone || "") === currentPhone)
-      .reverse();
+    let selectedMessages = [];
+
+    if (currentPhone) {
+      const { data: phoneMessages, error: phoneError } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("user_phone", currentPhone)
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      if (phoneError) {
+        return res.send("Erro ao buscar conversa: " + phoneError.message);
+      }
+
+      selectedMessages = phoneMessages || [];
+    }
 
     const sidebarHtml = conversations
       .map((conv) => {
         const active = conv.phone === currentPhone ? "active" : "";
+
         return `
           <a class="conversation ${active}" href="/admin?phone=${encodeURIComponent(conv.phone)}">
             <div class="phone">${escapeHtml(conv.phone)}</div>
@@ -84,7 +106,7 @@ router.get("/admin", async (req, res) => {
         return `
           <div class="message-row ${bubbleClass}">
             <div class="bubble">
-              <div class="text">${escapeHtml(msg.message)}</div>
+              <div class="text">${escapeHtml(getMessageText(msg))}</div>
               <div class="time">${escapeHtml(formatDate(msg.created_at))}</div>
             </div>
           </div>
@@ -98,11 +120,10 @@ router.get("/admin", async (req, res) => {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta http-equiv="refresh" content="10" />
           <title>Painel TRIVIA</title>
           <style>
-            * {
-              box-sizing: border-box;
-            }
+            * { box-sizing: border-box; }
 
             body {
               margin: 0;
@@ -230,17 +251,9 @@ router.get("/admin", async (req, res) => {
             }
 
             @media (max-width: 800px) {
-              .app {
-                grid-template-columns: 1fr;
-              }
-
-              .sidebar {
-                height: 40vh;
-              }
-
-              .chat {
-                height: 60vh;
-              }
+              .app { grid-template-columns: 1fr; }
+              .sidebar { height: 40vh; }
+              .chat { height: 60vh; }
             }
           </style>
         </head>
@@ -256,11 +269,18 @@ router.get("/admin", async (req, res) => {
                 Conversa: ${escapeHtml(currentPhone || "nenhuma")}
               </div>
 
-              <div class="messages">
+              <div class="messages" id="messages">
                 ${chatHtml || `<div class="empty">Nenhuma mensagem nesta conversa.</div>`}
               </div>
             </main>
           </div>
+
+          <script>
+            const box = document.getElementById("messages");
+            if (box) {
+              box.scrollTop = box.scrollHeight;
+            }
+          </script>
         </body>
       </html>
     `);

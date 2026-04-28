@@ -120,7 +120,7 @@ router.get("/admin", async (req, res) => {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <meta http-equiv="refresh" content="10" />
+          <meta http-equiv="refresh" content="160" />
           <title>Painel TRIVIA</title>
           <style>
             * { box-sizing: border-box; }

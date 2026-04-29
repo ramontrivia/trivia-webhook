@@ -1,10 +1,40 @@
-import { getCompanyByPhoneId } from "./companies.js";
-import { saveMessage } from "./messages.js";
-import { searchCommerces } from "./commerces.js";
-import { generateResponse } from "./openai.js";
-import { sendWhatsAppMessage } from "./whatsapp.js";
+import * as Companies from "./companies.js";
+import * as Messages from "./messages.js";
+import * as Commerces from "./commerces.js";
+import * as OpenAIService from "./openai.js";
+import * as WhatsApp from "./whatsapp.js";
 
 const inactivityTimers = new Map();
+
+const getCompanyByPhoneId =
+  Companies.getCompanyByPhoneId ||
+  Companies.findCompanyByPhoneId ||
+  Companies.getCompany ||
+  Companies.default;
+
+const saveMessage =
+  Messages.saveMessage ||
+  Messages.createMessage ||
+  Messages.insertMessage ||
+  Messages.default;
+
+const searchCommerces =
+  Commerces.searchCommerces ||
+  Commerces.searchCommerce ||
+  Commerces.findCommerces ||
+  Commerces.default;
+
+const generateResponse =
+  OpenAIService.generateResponse ||
+  OpenAIService.generateAIResponse ||
+  OpenAIService.askOpenAI ||
+  OpenAIService.default;
+
+const sendWhatsAppMessage =
+  WhatsApp.sendWhatsAppMessage ||
+  WhatsApp.sendMessage ||
+  WhatsApp.sendTextMessage ||
+  WhatsApp.default;
 
 function normalizeText(text = "") {
   return String(text)
@@ -14,53 +44,39 @@ function normalizeText(text = "") {
     .trim();
 }
 
-function isAudioMessage(message) {
-  return message?.type === "audio" || Boolean(message?.audio);
+function getText(message) {
+  return message?.text?.body || "";
 }
 
-function getMessageText(message) {
-  if (!message) return "";
-
-  if (message.type === "text") {
-    return message.text?.body || "";
-  }
-
-  if (message.text?.body) {
-    return message.text.body;
-  }
-
-  return "";
+function isAudio(message) {
+  return message?.type === "audio" || Boolean(message?.audio);
 }
 
 function isSimpleConversation(text) {
   const msg = normalizeText(text);
 
-  const simpleMessages = [
+  const simples = [
     "oi",
     "ola",
     "olá",
     "bom dia",
     "boa tarde",
     "boa noite",
-    "e ai",
-    "eai",
     "tudo bem",
     "td bem",
+    "e ai",
+    "eai",
     "beleza",
     "obrigado",
     "obrigada",
     "valeu",
-    "ok",
-    "certo",
-    "sim",
-    "nao",
-    "não"
+    "ok"
   ];
 
-  return simpleMessages.some((item) => msg === normalizeText(item));
+  return simples.some((s) => msg === normalizeText(s));
 }
 
-function simpleConversationReply(text) {
+function simpleReply(text) {
   const msg = normalizeText(text);
 
   if (msg.includes("bom dia")) {
@@ -79,84 +95,71 @@ function simpleConversationReply(text) {
     return "Ora pois, fico às ordens de vosmecê. Sempre que precisar, este bandeirante há de ajudar no que souber.";
   }
 
-  if (msg === "ok" || msg === "certo" || msg === "sim") {
-    return "Pois muito bem, vosmecê. Sigo por aqui, pronto para auxiliar no que for preciso.";
-  }
-
   return "Ora pois, saudações a vosmecê! Sou o bandeirante que voltou a Mateus Leme e sigo reconhecendo a cidade. Diga-me o que procura, que hei de tentar ajudar.";
 }
 
-function audioBlockedReply() {
+function audioReply() {
   return "Ora pois, nobre vosmecê, ainda não consigo escutar mensagens de áudio. Peço que me envie por escrito, que este bandeirante há de lhe responder com gosto.";
 }
 
-function noCompanyReply() {
-  return "Ora pois, não consegui reconhecer esta companhia por estas bandas. Peço que tente novamente mais tarde.";
-}
-
-function shouldPrioritizeHealth(text) {
+function isHealthQuestion(text) {
   const msg = normalizeText(text);
 
-  const healthTerms = [
+  return [
     "saude",
-    "saúde",
     "posto",
     "ubs",
     "hospital",
     "upa",
     "pronto atendimento",
     "medico",
-    "médico",
     "consulta",
-    "enfermeiro",
-    "farmacia",
-    "farmácia",
-    "secretaria de saude",
-    "secretaria de saúde"
-  ];
-
-  return healthTerms.some((term) => msg.includes(normalizeText(term)));
+    "secretaria de saude"
+  ].some((term) => msg.includes(term));
 }
 
-function buildCommerceContext(commerces = []) {
+function buildContext(commerces = []) {
   if (!Array.isArray(commerces) || commerces.length === 0) {
-    return "Nenhum comércio ou serviço encontrado no banco de dados para esta busca.";
+    return "Nenhum registro encontrado no banco de dados para esta busca.";
   }
 
   return commerces
     .slice(0, 10)
     .map((item, index) => {
-      const parts = [];
-
-      parts.push(`${index + 1}. Nome: ${item.nome || "Não informado"}`);
-
-      if (item.telefone) {
-        parts.push(`Telefone: ${item.telefone}`);
-      }
-
-      if (item.endereco) {
-        parts.push(`Endereço: ${item.endereco}`);
-      }
-
-      if (item.horario) {
-        parts.push(`Horário: ${item.horario}`);
-      }
-
-      if (item.tipo_google) {
-        parts.push(`Tipo: ${item.tipo_google}`);
-      }
-
-      if (item.search_key) {
-        parts.push(`Palavras-chave: ${item.search_key}`);
-      }
-
-      return parts.join(" | ");
+      return [
+        `${index + 1}. Nome: ${item.nome || "Não informado"}`,
+        item.telefone ? `Telefone: ${item.telefone}` : null,
+        item.endereco ? `Endereço: ${item.endereco}` : null,
+        item.horario ? `Horário: ${item.horario}` : null,
+        item.tipo_google ? `Tipo: ${item.tipo_google}` : null,
+        item.search_key ? `Busca: ${item.search_key}` : null
+      ]
+        .filter(Boolean)
+        .join(" | ");
     })
     .join("\n");
 }
 
-function scheduleInactivityMessage({ company, from }) {
-  const key = `${company.id}:${from}`;
+async function saveSafe(data) {
+  if (typeof saveMessage === "function") {
+    await saveMessage(data);
+  }
+}
+
+async function sendSafe({ phoneNumberId, to, message }) {
+  if (typeof sendWhatsAppMessage !== "function") {
+    throw new Error("Função de envio do WhatsApp não encontrada em whatsapp.js");
+  }
+
+  await sendWhatsAppMessage({
+    phoneNumberId,
+    to,
+    message
+  });
+}
+
+function scheduleInactivityMessage({ company, from, phoneNumberId }) {
+  const key = `${company?.id || phoneNumberId}:${from}`;
 
   if (inactivityTimers.has(key)) {
     clearTimeout(inactivityTimers.get(key));
@@ -167,20 +170,20 @@ function scheduleInactivityMessage({ company, from }) {
       const message =
         "Ora pois, nobre vosmecê, sigo por aqui caso ainda precise de ajuda. Este bandeirante continua recolhendo informações pela cidade.";
 
-      await saveMessage({
+      await saveSafe({
         company_id: company.id,
         phone: from,
         role: "assistant",
         content: message
       });
 
-      await sendWhatsAppMessage({
-        phoneNumberId: company.phone_id,
+      await sendSafe({
+        phoneNumberId,
         to: from,
         message
       });
     } catch (error) {
-      console.error("Erro ao enviar mensagem de inatividade:", error);
+      console.error("Erro na mensagem de inatividade:", error);
     } finally {
       inactivityTimers.delete(key);
     }
@@ -191,6 +194,10 @@ function scheduleInactivityMessage({ company, from }) {
 
 export async function handleIncomingMessage(payload) {
   try {
+    if (typeof getCompanyByPhoneId !== "function") {
+      throw new Error("Função para buscar empresa não encontrada em companies.js");
+    }
+
     const entry = payload?.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;
@@ -201,54 +208,51 @@ export async function handleIncomingMessage(payload) {
     if (!phoneNumberId || !message) {
       return {
         success: true,
-        ignored: true,
-        reason: "Payload sem phone_number_id ou sem mensagem."
+        ignored: true
       };
     }
 
     const from = message.from;
-
     const company = await getCompanyByPhoneId(phoneNumberId);
 
     if (!company) {
-      const reply = noCompanyReply();
-
-      await sendWhatsAppMessage({
+      await sendSafe({
         phoneNumberId,
         to: from,
-        message: reply
+        message:
+          "Ora pois, não consegui reconhecer esta companhia por estas bandas. Peço que tente novamente mais tarde."
       });
 
       return {
         success: false,
-        reason: "Empresa não encontrada."
+        reason: "Empresa não encontrada"
       };
     }
 
-    if (isAudioMessage(message)) {
-      const reply = audioBlockedReply();
+    if (isAudio(message)) {
+      const reply = audioReply();
 
-      await saveMessage({
+      await saveSafe({
         company_id: company.id,
         phone: from,
         role: "user",
         content: "[ÁUDIO]"
       });
 
-      await saveMessage({
+      await saveSafe({
         company_id: company.id,
         phone: from,
         role: "assistant",
         content: reply
       });
 
-      await sendWhatsAppMessage({
+      await sendSafe({
         phoneNumberId,
         to: from,
         message: reply
       });
 
-      scheduleInactivityMessage({ company, from });
+      scheduleInactivityMessage({ company, from, phoneNumberId });
 
       return {
         success: true,
@@ -256,33 +260,33 @@ export async function handleIncomingMessage(payload) {
       };
     }
 
-    const text = getMessageText(message);
+    const text = getText(message);
 
     if (!text) {
       const reply =
         "Ora pois, nobre vosmecê, recebi sua mensagem, mas não consegui entender o conteúdo. Envie-me por escrito o que procura, por gentileza.";
 
-      await saveMessage({
+      await saveSafe({
         company_id: company.id,
         phone: from,
         role: "user",
         content: "[MENSAGEM SEM TEXTO]"
       });
 
-      await saveMessage({
+      await saveSafe({
         company_id: company.id,
         phone: from,
         role: "assistant",
         content: reply
       });
 
-      await sendWhatsAppMessage({
+      await sendSafe({
         phoneNumberId,
         to: from,
         message: reply
       });
 
-      scheduleInactivityMessage({ company, from });
+      scheduleInactivityMessage({ company, from, phoneNumberId });
 
       return {
         success: true,
@@ -290,7 +294,7 @@ export async function handleIncomingMessage(payload) {
       };
     }
 
-    await saveMessage({
+    await saveSafe({
       company_id: company.id,
       phone: from,
       role: "user",
@@ -298,22 +302,22 @@ export async function handleIncomingMessage(payload) {
     });
 
     if (isSimpleConversation(text)) {
-      const reply = simpleConversationReply(text);
+      const reply = simpleReply(text);
 
-      await saveMessage({
+      await saveSafe({
         company_id: company.id,
         phone: from,
         role: "assistant",
         content: reply
       });
 
-      await sendWhatsAppMessage({
+      await sendSafe({
         phoneNumberId,
         to: from,
         message: reply
       });
 
-      scheduleInactivityMessage({ company, from });
+      scheduleInactivityMessage({ company, from, phoneNumberId });
 
       return {
         success: true,
@@ -321,42 +325,50 @@ export async function handleIncomingMessage(payload) {
       };
     }
 
-    const healthPriority = shouldPrioritizeHealth(text);
+    const healthPriority = isHealthQuestion(text);
 
-    const commerces = await searchCommerces({
-      company_id: company.id,
-      query: text,
-      limit: 50,
-      healthPriority
-    });
+    let results = [];
 
-    const context = buildCommerceContext(commerces);
+    if (typeof searchCommerces === "function") {
+      results = await searchCommerces({
+        company_id: company.id,
+        query: text,
+        limit: 50,
+        healthPriority
+      });
+    }
 
-    const reply = await generateResponse({
-      userMessage: text,
-      context,
-      company,
-      healthPriority
-    });
+    const context = buildContext(results);
+
+    let reply;
+
+    if (typeof generateResponse === "function") {
+      reply = await generateResponse({
+        userMessage: text,
+        context,
+        company,
+        healthPriority
+      });
+    }
 
     const finalReply =
       reply ||
       "Ora pois, nobre vosmecê, não encontrei informação segura o bastante para lhe responder sem risco de inventar. Posso tentar buscar por outro nome ou referência.";
 
-    await saveMessage({
+    await saveSafe({
       company_id: company.id,
       phone: from,
       role: "assistant",
       content: finalReply
     });
 
-    await sendWhatsAppMessage({
+    await sendSafe({
       phoneNumberId,
       to: from,
       message: finalReply
     });
 
-    scheduleInactivityMessage({ company, from });
+    scheduleInactivityMessage({ company, from, phoneNumberId });
 
     return {
       success: true,

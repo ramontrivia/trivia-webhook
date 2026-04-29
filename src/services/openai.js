@@ -1,330 +1,159 @@
-import { sendTextMessage } from "./whatsapp.js";
-import { getCompanyByPhoneNumber } from "./companies.js";
-import { generateResponse } from "./openai.js";
-import { saveMessage } from "./messages.js";
-import { searchCommerces } from "./commerces.js";
+import axios from "axios";
+import { getConversationHistory } from "./history.js";
+import { loadKnowledge } from "./knowledge.js";
 
-const inactivityTimers = new Map();
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-function cleanText(text) {
-  return String(text || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function shouldSearchCommerces(text) {
-  const search = cleanText(text);
-
-  if (!search) return false;
-
-  const blockedMessages = [
-    "oi",
-    "ola",
-    "opa",
-    "bom dia",
-    "boa tarde",
-    "boa noite",
-    "tudo bem",
-    "tudo bom",
-    "beleza",
-    "blz",
-    "ok",
-    "certo",
-    "sim",
-    "nao",
-    "obrigado",
-    "obrigada",
-    "valeu"
-  ];
-
-  if (blockedMessages.includes(search)) {
-    return false;
-  }
-
-  const usefulTerms = [
-    "telefone",
-    "numero",
-    "contato",
-    "endereco",
-    "horario",
-    "onde",
-    "tem",
-    "procuro",
-    "preciso",
-    "quero",
-    "comercio",
-    "loja",
-    "farmacia",
-    "saude",
-    "posto",
-    "ubs",
-    "hospital",
-    "clinica",
-    "medico",
-    "dentista",
-    "escola",
-    "mercado",
-    "supermercado",
-    "padaria",
-    "oficina",
-    "mecanica",
-    "auto",
-    "roupa",
-    "moda",
-    "pizzaria",
-    "restaurante",
-    "lanchonete",
-    "barbearia",
-    "salao",
-    "academia",
-    "racao",
-    "pet",
-    "veterinaria",
-    "construcao",
-    "eletricista",
-    "advogado",
-    "cartorio",
-    "prefeitura"
-  ];
-
-  return usefulTerms.some((term) => search.includes(term));
-}
-
-function clearInactivityTimer(from) {
-  const existingTimer = inactivityTimers.get(from);
-
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-    inactivityTimers.delete(from);
-  }
-}
-
-function scheduleInactivityMessage({ company, from }) {
-  clearInactivityTimer(from);
-
-  const timer = setTimeout(async () => {
-    try {
-      const message =
-        "Foi bom ver vosmecê por aqui. Agora sigo minha caminhada, recolhendo informações para deixar tudo bem guardado em minha agenda. Minha função nestas terras é ajudar com telefones de comércios, horários de funcionamento, serviços da cidade e, claro, bater uma boa prosa quando precisares.";
-
-      await saveMessage({
-        company,
-        from,
-        content: message,
-        role: "assistant"
-      });
-
-      await sendTextMessage({
-        company,
-        to: from,
-        text: message
-      });
-
-      console.log("MENSAGEM DE INATIVIDADE ENVIADA:", from);
-      inactivityTimers.delete(from);
-    } catch (err) {
-      console.error("ERRO AO ENVIAR MENSAGEM DE INATIVIDADE:", {
-        message: err?.message,
-        status: err?.response?.status,
-        data: err?.response?.data
-      });
-    }
-  }, 5 * 60 * 1000);
-
-  inactivityTimers.set(from, timer);
-}
-
-export async function handleIncomingMessage({ body }) {
+export async function generateResponse({ text, company, from }) {
   try {
-    console.log("ORCHESTRATOR START");
+    console.log("GERANDO RESPOSTA...");
 
-    const value = body?.entry?.[0]?.changes?.[0]?.value;
+    const history = await getConversationHistory({ company, from });
+    const knowledge = loadKnowledge(company.client_key);
 
-    if (!value) {
-      console.log("SEM VALUE");
-      return;
-    }
+    const hasAssistantMessage = history.some((item) => item.role === "assistant");
 
-    const message = value?.messages?.[0];
-    const status = value?.statuses?.[0];
-    const phoneId = String(value?.metadata?.phone_number_id || "").trim();
+    const systemPrompt = `
+Você é Mateus Leme, bandeirante antigo que voltou há pouco tempo às terras de Mateus Leme.
 
-    if (status) {
-      console.log("STATUS EVENT:", status.status);
-      return;
-    }
+Você NÃO é assistente virtual.
+Você NÃO é robô.
+Você NÃO fala como atendimento moderno.
+Você conversa como homem antigo, de fala forte, respeitosa, curiosa e de boa prosa.
 
-    if (!message) {
-      console.log("SEM MENSAGEM");
-      return;
-    }
+REGRA DE TRATAMENTO:
+- NÃO chame a pessoa sempre de "meu amigo", pois podem ser homens ou mulheres.
+- Use tratamentos neutros e antigos:
+  "vosmecê"
+  "boa alma"
+  "nobre pessoa"
+  "minha boa gente"
+  "quem me fala"
+- Só use "meu amigo" se combinar naturalmente.
+- Se parecer mulher, pode usar "minha senhora" ou "boa senhora", sem exagero.
 
-    const from = String(message.from || "").trim();
-    const type = String(message.type || "").trim();
-    const text = String(message.text?.body || "").trim();
+DIALETO E ESTILO:
+- Fale com jeito mais antigo, mas compreensível.
+- Use expressões como:
+  "pois veja"
+  "ora pois"
+  "vosmecê"
+  "lhe digo"
+  "hei de"
+  "por estas bandas"
+  "nestas terras"
+  "não me chegou aos ouvidos"
+  "ando recolhendo notícia"
+  "boa prosa"
+  "sigo minha caminhada"
+  "de muita serventia"
+  "com firmeza"
+  "não direi de orelhada"
+- Não use linguagem moderna demais.
+- Não diga "como posso ajudar".
+- Não diga "sou uma IA".
+- Não use markdown, títulos, ### ou excesso de negrito.
+- Não responda seco.
 
-    clearInactivityTimer(from);
+PRIMEIRO CONTATO:
+Se for a primeira mensagem da conversa, apresente-se:
 
-    console.log("MENSAGEM RECEBIDA:", {
-      from,
-      type,
-      text,
-      phoneId
-    });
+"Saudações. Sou Mateus Leme… voltei há pouco a estas terras e ainda sigo reconhecendo seus caminhos, suas casas, seus comércios e sua gente. Ando recolhendo em minha agenda nomes, telefones, horários, histórias e serviços desta cidade. Diga-me, vosmecê procura o quê por estas bandas?"
 
-    const company = await getCompanyByPhoneNumber(phoneId);
+QUANDO SOUBER:
+- Responda com naturalidade.
+- Use a base de conhecimento.
+- Se tiver comércio, telefone, endereço ou horário, entregue com clareza.
+- Se houver lista, organize bem.
+- Mantenha o tom antigo.
 
-    if (!company) {
-      console.log("EMPRESA NAO ENCONTRADA:", phoneId);
-      return;
-    }
+QUANDO NÃO SOUBER:
+Nunca responda seco.
+Nunca diga apenas "não sei".
+Nunca diga "não tenho acesso".
+Nunca invente.
 
-    console.log("EMPRESA ENCONTRADA:", {
-      id: company.id,
-      client_key: company.client_key,
-      name: company.name
-    });
+Use este estilo:
 
-    let reply = "";
+"Então, boa alma… estou de volta há tão pouco tempo, que ainda sigo passando em cada lugar destas terras e buscando na memória o que se deu por ali.
 
-    if (type === "audio") {
-      const audioNotice = "[Áudio recebido - ainda não processado]";
+Esse ponto ainda não visitei de novo, nem tenho informação firme registrada. Mas em breve, pode ter certeza, hei de ter sim mais detalhes, telefone e outras notícias para lhe contar.
 
-      await saveMessage({
-        company,
-        from,
-        content: audioNotice,
-        role: "user"
-      });
+Foram muitos anos longe daqui… são muitas coisas para lembrar."
 
-      reply =
-        "Ora pois… por enquanto ainda não consigo ouvir áudio nessas engenhocas modernas. Mande-me por escrito, que hei de lhe responder melhor.";
+SE TIVER INFORMAÇÕES ENCONTRADAS NA CIDADE:
+- Use essas informações somente se tiverem relação direta com a pergunta.
+- Liste nome e telefone.
+- Se houver endereço ou horário, mencione.
+- Não ignore dados encontrados quando forem relevantes.
 
-      await saveMessage({
-        company,
-        from,
-        content: reply,
-        role: "assistant"
-      });
+SE FOR SAÚDE:
+- Não dê diagnóstico.
+- Não indique remédio.
+- Em urgência, oriente procurar atendimento imediato ou ligar 192.
+- Se não encontrar o número exato, ofereça alternativas de saúde pública primeiro: Secretaria de Saúde, hospital, pronto atendimento, UBS, posto de saúde.
+- Depois mencione clínicas ou serviços particulares, se aparecerem.
 
-      await sendTextMessage({
-        company,
-        to: from,
-        text: reply
-      });
+SE FOR HISTÓRIA / ÍNDIOS / POLÍTICA / RELIGIÃO:
+- Se não estiver claramente na base, não invente.
+- Pode explicar contexto geral, mas deixe claro que não tem registro firme.
+- Nunca cite povo indígena, data ou personagem histórico sem estar na base.
 
-      scheduleInactivityMessage({ company, from });
+SE O USUÁRIO REPETIR UMA PERGUNTA:
+- Não repita a resposta inteira.
+- Reconheça que já falaram disso.
+- Responda curto, humano e no personagem.
 
-      console.log("ÁUDIO RECEBIDO - RESPOSTA PADRAO ENVIADA");
-      return;
-    }
+REGRAS IMPORTANTES:
+- Nunca invente telefone.
+- Nunca invente endereço.
+- Nunca invente horário.
+- Nunca invente preço.
+- Nunca invente fato histórico.
+- Nunca invente nome de comércio.
+- Se não estiver na base, diga que ainda não sabe, mas de forma humana e antiga.
 
-    if (type === "text" && text) {
-      await saveMessage({
-        company,
-        from,
-        content: text,
-        role: "user"
-      });
+BASE DE CONHECIMENTO:
+${knowledge || "Ainda há pouca informação registrada nesta base."}
+`;
 
-      let context = "";
-
-      if (shouldSearchCommerces(text)) {
-        const commerces = await searchCommerces(text);
-
-        if (commerces.length > 0) {
-          const list = commerces
-            .slice(0, 10)
-            .map((c) => {
-              const parts = [];
-
-              if (c.nome) parts.push(c.nome);
-              if (c.telefone) parts.push(`Tel: ${c.telefone}`);
-              if (c.endereco) parts.push(`Endereço: ${c.endereco}`);
-              if (c.horario) parts.push(`Horário: ${c.horario}`);
-
-              return `- ${parts.join(" — ")}`;
-            })
-            .join("\n");
-
-          context = `
-INFORMAÇÕES ENCONTRADAS NA CIDADE:
-${list}
-
-Use essas informações somente se elas tiverem relação direta com a pergunta da pessoa.
-Se a pessoa apenas cumprimentou, não use lista.
-Liste as opções encontradas de forma clara e organizada.
-          `;
-        }
-      } else {
-        console.log("BUSCA DE COMERCIOS IGNORADA PARA:", text);
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...history,
+      {
+        role: "user",
+        content: hasAssistantMessage
+          ? text
+          : `Esta é a primeira mensagem desta pessoa. Apresente-se como Mateus Leme retornando à cidade e responda ao que ela disse: ${text}`
       }
+    ];
 
-      const finalText = context ? `${text}\n\n${context}` : text;
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: OPENAI_MODEL,
+        messages,
+        temperature: 0.9
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
 
-      reply = await generateResponse({
-        text: finalText,
-        company,
-        from
-      });
+    const reply = response.data?.choices?.[0]?.message?.content;
 
-      await saveMessage({
-        company,
-        from,
-        content: reply,
-        role: "assistant"
-      });
+    console.log("RESPOSTA:", reply);
 
-      await sendTextMessage({
-        company,
-        to: from,
-        text: reply
-      });
-
-      scheduleInactivityMessage({ company, from });
-
-      console.log("RESPOSTA ENVIADA");
-      return;
-    }
-
-    const unsupportedNotice = `[Mensagem recebida do tipo ${type} - ainda não processada]`;
-
-    await saveMessage({
-      company,
-      from,
-      content: unsupportedNotice,
-      role: "user"
-    });
-
-    reply =
-      "Ora pois… esse tipo de mensagem ainda não consigo entender por aqui. Se puder, mande-me por escrito, que hei de lhe responder melhor.";
-
-    await saveMessage({
-      company,
-      from,
-      content: reply,
-      role: "assistant"
-    });
-
-    await sendTextMessage({
-      company,
-      to: from,
-      text: reply
-    });
-
-    scheduleInactivityMessage({ company, from });
-
-    console.log("TIPO NAO SUPORTADO:", type);
+    return reply || "Ora pois… por um instante me faltaram as palavras. Chame-me de novo, que torno à prosa.";
 
   } catch (err) {
-    console.error("ERRO ORCHESTRATOR:", {
-      message: err?.message,
-      status: err?.response?.status,
-      data: err?.response?.data
-    });
+    console.error("ERRO OPENAI:", err?.response?.data || err.message);
+
+    return "Ora pois… tive um tropeço nessas engenhocas modernas. Chame-me novamente daqui a pouco.";
   }
 }

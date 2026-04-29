@@ -1,181 +1,164 @@
-import { sendTextMessage } from "./whatsapp.js";
-import { getCompanyByPhoneNumber } from "./companies.js";
-import { generateResponse } from "./openai.js";
-import { saveMessage } from "./messages.js";
-import { searchCommerces } from "./commerces.js"; // 👈 NOVO
+import { supabase } from "./supabase.js";
 
-export async function handleIncomingMessage({ body }) {
+function cleanSearchText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isHealthIntent(text) {
+  const search = cleanSearchText(text);
+
+  const terms = [
+    "saude",
+    "posto",
+    "ubs",
+    "upa",
+    "hospital",
+    "pronto atendimento",
+    "pronto",
+    "atendimento",
+    "medico",
+    "medica",
+    "consulta",
+    "clinica",
+    "dentista",
+    "psicologo",
+    "psicologa",
+    "saude mental",
+    "secretaria saude",
+    "vacina",
+    "exame",
+    "laboratorio",
+    "farmacia",
+    "remedio"
+  ];
+
+  return terms.some((term) => search.includes(term));
+}
+
+function scoreCommerce(item, originalText) {
+  const text = cleanSearchText(
+    [
+      item.nome,
+      item.telefone,
+      item.endereco,
+      item.horario,
+      item.tipo_google,
+      item.busca_origem,
+      item.search_key
+    ].join(" ")
+  );
+
+  const search = cleanSearchText(originalText);
+
+  let score = 0;
+
+  const words = search
+    .split(" ")
+    .filter((word) => word.length >= 3);
+
+  for (const word of words) {
+    if (text.includes(word)) score += 3;
+  }
+
+  const publicHealthPriority = [
+    "secretaria",
+    "hospital",
+    "santa terezinha",
+    "ubs",
+    "posto",
+    "saude",
+    "unidade",
+    "centro de saude",
+    "saude mental",
+    "atencao a mulher"
+  ];
+
+  for (const term of publicHealthPriority) {
+    if (text.includes(term)) score += 5;
+  }
+
+  return score;
+}
+
+export async function searchCommerces(text) {
   try {
-    console.log("ORCHESTRATOR START");
+    const search = cleanSearchText(text);
 
-    const value = body?.entry?.[0]?.changes?.[0]?.value;
-
-    if (!value) {
-      console.log("SEM VALUE");
-      return;
+    if (!search) {
+      return [];
     }
 
-    const message = value?.messages?.[0];
-    const status = value?.statuses?.[0];
-    const phoneId = String(value?.metadata?.phone_number_id || "").trim();
+    console.log("BUSCANDO COMERCIOS:", search);
 
-    if (status) {
-      console.log("STATUS EVENT:", status.status);
-      return;
+    let words = search
+      .split(" ")
+      .filter((word) => word.length >= 3)
+      .slice(0, 6);
+
+    if (isHealthIntent(search)) {
+      words = [
+        ...words,
+        "saude",
+        "hospital",
+        "posto",
+        "ubs",
+        "secretaria",
+        "clinica",
+        "medico",
+        "pronto",
+        "atendimento"
+      ];
     }
 
-    if (!message) {
-      console.log("SEM MENSAGEM");
-      return;
+    words = [...new Set(words)].slice(0, 12);
+
+    if (words.length === 0) {
+      return [];
     }
 
-    const from = String(message.from || "").trim();
-    const type = String(message.type || "").trim();
-    const text = String(message.text?.body || "").trim();
+    const filters = words
+      .map(
+        (word) =>
+          `nome.ilike.%${word}%,search_key.ilike.%${word}%,tipo_google.ilike.%${word}%,busca_origem.ilike.%${word}%,endereco.ilike.%${word}%`
+      )
+      .join(",");
 
-    console.log("MENSAGEM RECEBIDA:", {
-      from,
-      type,
-      text,
-      phoneId
-    });
+    const { data, error } = await supabase
+      .from("commerces")
+      .select("nome, telefone, endereco, horario, tipo_google, busca_origem, search_key")
+      .eq("active", true)
+      .or(filters)
+      .limit(50);
 
-    const company = await getCompanyByPhoneNumber(phoneId);
-
-    if (!company) {
-      console.log("EMPRESA NAO ENCONTRADA:", phoneId);
-      return;
+    if (error) {
+      console.error("ERRO AO BUSCAR COMERCIOS:", error);
+      return [];
     }
 
-    console.log("EMPRESA ENCONTRADA:", {
-      id: company.id,
-      client_key: company.client_key,
-      name: company.name
-    });
+    const results = data || [];
 
-    let reply = "";
+    const sorted = results
+      .map((item) => ({
+        ...item,
+        _score: scoreCommerce(item, text)
+      }))
+      .filter((item) => item._score > 0)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 20)
+      .map(({ _score, ...item }) => item);
 
-    // 🔊 BLOQUEIO DE ÁUDIO (mantido)
-    if (type === "audio") {
-      const audioNotice = "[Áudio recebido - ainda não processado]";
+    console.log("COMERCIOS ENCONTRADOS:", sorted.length);
 
-      await saveMessage({
-        company,
-        from,
-        content: audioNotice,
-        role: "user"
-      });
-
-      reply =
-        "Ô meu amigo… por ora ainda não consigo ouvir áudio nessas engenhocas modernas. " +
-        "Me mande por escrito, que aí consigo te responder melhor.";
-
-      await saveMessage({
-        company,
-        from,
-        content: reply,
-        role: "assistant"
-      });
-
-      await sendTextMessage({
-        company,
-        to: from,
-        text: reply
-      });
-
-      console.log("ÁUDIO RECEBIDO - RESPOSTA PADRAO ENVIADA");
-      return;
-    }
-
-    // 💬 TEXTO
-    if (type === "text" && text) {
-      await saveMessage({
-        company,
-        from,
-        content: text,
-        role: "user"
-      });
-
-      // 🔍 NOVO: busca no banco
-      const commerces = await searchCommerces(text);
-
-      let context = "";
-
-      if (commerces.length > 0) {
-        const list = commerces
-          .slice(0, 5)
-          .map(
-            (c) =>
-              `- ${c.nome}${c.telefone ? " — Tel: " + c.telefone : ""}`
-          )
-          .join("\n");
-
-        context = `
-INFORMAÇÕES ENCONTRADAS NA CIDADE:
-${list}
-
-Use essas informações na resposta se fizer sentido.
-        `;
-      }
-
-      // 🤖 resposta com contexto
-      reply = await generateResponse({
-        text: `${text}\n\n${context}`,
-        company,
-        from
-      });
-
-      await saveMessage({
-        company,
-        from,
-        content: reply,
-        role: "assistant"
-      });
-
-      await sendTextMessage({
-        company,
-        to: from,
-        text: reply
-      });
-
-      console.log("RESPOSTA ENVIADA");
-      return;
-    }
-
-    // 🚫 OUTROS TIPOS
-    const unsupportedNotice = `[Mensagem recebida do tipo ${type} - ainda não processada]`;
-
-    await saveMessage({
-      company,
-      from,
-      content: unsupportedNotice,
-      role: "user"
-    });
-
-    reply =
-      "Ô meu amigo… esse tipo de mensagem ainda não consigo entender por aqui. " +
-      "Se puder, me mande por escrito, que eu lhe respondo melhor.";
-
-    await saveMessage({
-      company,
-      from,
-      content: reply,
-      role: "assistant"
-    });
-
-    await sendTextMessage({
-      company,
-      to: from,
-      text: reply
-    });
-
-    console.log("TIPO NAO SUPORTADO:", type);
+    return sorted;
 
   } catch (err) {
-    console.error("ERRO ORCHESTRATOR:", {
-      message: err?.message,
-      status: err?.response?.status,
-      data: err?.response?.data
-    });
+    console.error("ERRO GERAL SEARCH COMMERCES:", err);
+    return [];
   }
 }

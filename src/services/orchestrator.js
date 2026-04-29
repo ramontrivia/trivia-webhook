@@ -2,6 +2,7 @@ import { sendTextMessage } from "./whatsapp.js";
 import { getCompanyByPhoneNumber } from "./companies.js";
 import { generateResponse } from "./openai.js";
 import { saveMessage } from "./messages.js";
+import { searchCommerces } from "./commerces.js"; // 👈 NOVO
 
 export async function handleIncomingMessage({ body }) {
   try {
@@ -54,6 +55,7 @@ export async function handleIncomingMessage({ body }) {
 
     let reply = "";
 
+    // 🔊 BLOQUEIO DE ÁUDIO (mantido)
     if (type === "audio") {
       const audioNotice = "[Áudio recebido - ainda não processado]";
 
@@ -85,6 +87,7 @@ export async function handleIncomingMessage({ body }) {
       return;
     }
 
+    // 💬 TEXTO
     if (type === "text" && text) {
       await saveMessage({
         company,
@@ -93,8 +96,31 @@ export async function handleIncomingMessage({ body }) {
         role: "user"
       });
 
+      // 🔍 NOVO: busca no banco
+      const commerces = await searchCommerces(text);
+
+      let context = "";
+
+      if (commerces.length > 0) {
+        const list = commerces
+          .slice(0, 5)
+          .map(
+            (c) =>
+              `- ${c.nome}${c.telefone ? " — Tel: " + c.telefone : ""}`
+          )
+          .join("\n");
+
+        context = `
+INFORMAÇÕES ENCONTRADAS NA CIDADE:
+${list}
+
+Use essas informações na resposta se fizer sentido.
+        `;
+      }
+
+      // 🤖 resposta com contexto
       reply = await generateResponse({
-        text,
+        text: `${text}\n\n${context}`,
         company,
         from
       });
@@ -116,6 +142,7 @@ export async function handleIncomingMessage({ body }) {
       return;
     }
 
+    // 🚫 OUTROS TIPOS
     const unsupportedNotice = `[Mensagem recebida do tipo ${type} - ainda não processada]`;
 
     await saveMessage({

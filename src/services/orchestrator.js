@@ -4,6 +4,52 @@ import { generateResponse } from "./openai.js";
 import { saveMessage } from "./messages.js";
 import { searchCommerces } from "./commerces.js";
 
+const inactivityTimers = new Map();
+
+function clearInactivityTimer(from) {
+  const existingTimer = inactivityTimers.get(from);
+
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    inactivityTimers.delete(from);
+  }
+}
+
+function scheduleInactivityMessage({ company, from }) {
+  clearInactivityTimer(from);
+
+  const timer = setTimeout(async () => {
+    try {
+      const message =
+        "Meu amigo, foi bom te ver por aqui. Mas agora vou seguir minha caminhada, recolhendo informações para deixar tudo bem guardado em minha agenda. Minha função hoje nestas terras é ajudar com telefones de comércios, horários de funcionamento, serviços da cidade e, claro, bater uma boa prosa quando precisares.";
+
+      await saveMessage({
+        company,
+        from,
+        content: message,
+        role: "assistant"
+      });
+
+      await sendTextMessage({
+        company,
+        to: from,
+        text: message
+      });
+
+      console.log("MENSAGEM DE INATIVIDADE ENVIADA:", from);
+      inactivityTimers.delete(from);
+    } catch (err) {
+      console.error("ERRO AO ENVIAR MENSAGEM DE INATIVIDADE:", {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data
+      });
+    }
+  }, 5 * 60 * 1000);
+
+  inactivityTimers.set(from, timer);
+}
+
 export async function handleIncomingMessage({ body }) {
   try {
     console.log("ORCHESTRATOR START");
@@ -32,6 +78,8 @@ export async function handleIncomingMessage({ body }) {
     const from = String(message.from || "").trim();
     const type = String(message.type || "").trim();
     const text = String(message.text?.body || "").trim();
+
+    clearInactivityTimer(from);
 
     console.log("MENSAGEM RECEBIDA:", {
       from,
@@ -81,6 +129,8 @@ export async function handleIncomingMessage({ body }) {
         to: from,
         text: reply
       });
+
+      scheduleInactivityMessage({ company, from });
 
       console.log("ÁUDIO RECEBIDO - RESPOSTA PADRAO ENVIADA");
       return;
@@ -141,6 +191,8 @@ Liste as opções encontradas de forma clara e organizada.
         text: reply
       });
 
+      scheduleInactivityMessage({ company, from });
+
       console.log("RESPOSTA ENVIADA");
       return;
     }
@@ -170,6 +222,8 @@ Liste as opções encontradas de forma clara e organizada.
       to: from,
       text: reply
     });
+
+    scheduleInactivityMessage({ company, from });
 
     console.log("TIPO NAO SUPORTADO:", type);
 

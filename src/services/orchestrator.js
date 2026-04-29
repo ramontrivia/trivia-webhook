@@ -134,7 +134,7 @@ export async function searchCommerces(text) {
       .select("nome, telefone, endereco, horario, tipo_google, busca_origem, search_key")
       .eq("active", true)
       .or(filters)
-      .limit(50);
+      .limit(100);
 
     if (error) {
       console.error("ERRO AO BUSCAR COMERCIOS:", error);
@@ -150,7 +150,7 @@ export async function searchCommerces(text) {
       }))
       .filter((item) => item._score > 0)
       .sort((a, b) => b._score - a._score)
-      .slice(0, 20)
+      .slice(0, 50)
       .map(({ _score, ...item }) => item);
 
     console.log("COMERCIOS ENCONTRADOS:", sorted.length);

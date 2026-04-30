@@ -167,10 +167,17 @@ function buildContext(items = []) {
 async function saveSafe({ company, from, role, content }) {
   if (typeof saveMessage !== "function") return;
 
+  const clientKey =
+    company?.client_key ||
+    company?.key ||
+    company?.slug ||
+    company?.company_id ||
+    company?.id;
+
   try {
     await saveMessage({
-      company_id: company.company_id || company.id,
-      client_key: company.client_key,
+      company_id: company?.company_id || company?.id,
+      client_key: String(clientKey),
       from,
       phone: from,
       role,
@@ -178,7 +185,11 @@ async function saveSafe({ company, from, role, content }) {
       message: content
     });
   } catch (error) {
-    console.error("[ORCHESTRATOR] Erro ao salvar:", error.message);
+    console.error("[ORCHESTRATOR] Erro ao salvar:", {
+      message: error.message,
+      details: error.details,
+      code: error.code
+    });
   }
 }
 

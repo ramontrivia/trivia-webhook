@@ -15,9 +15,9 @@ const generateResponse =
   OpenAI.default;
 
 const sendMessage =
+  WhatsApp.sendTextMessage ||
   WhatsApp.sendWhatsAppMessage ||
   WhatsApp.sendMessage ||
-  WhatsApp.sendTextMessage ||
   WhatsApp.default;
 
 function normalize(text = "") {
@@ -131,35 +131,18 @@ async function saveSafe({ company, from, content, role }) {
   }
 }
 
-async function sendSafe({ phoneNumberId, to, message }) {
+async function sendSafe({ company, to, message }) {
   if (typeof sendMessage !== "function") {
     throw new Error("Função de envio não encontrada em whatsapp.js");
   }
 
   console.log("[ORCHESTRATOR] Enviando mensagem para:", to);
 
-  try {
-    await sendMessage({
-      phoneNumberId,
-      phone_number_id: phoneNumberId,
-      to,
-      message,
-      text: message,
-      body: message
-    });
-    return;
-  } catch (error) {
-    console.error("[ORCHESTRATOR] Envio por objeto falhou:", error.message);
-  }
-
-  try {
-    await sendMessage(phoneNumberId, to, message);
-    return;
-  } catch (error) {
-    console.error("[ORCHESTRATOR] Envio por argumentos falhou:", error.message);
-  }
-
-  await sendMessage(to, message, phoneNumberId);
+  await sendMessage({
+    company,
+    to,
+    text: message
+  });
 }
 
 async function searchSafe(text) {
@@ -197,8 +180,8 @@ async function generateSafe({ text, context, company }) {
   }
 }
 
-function scheduleInactivity({ company, from, phoneNumberId }) {
-  const key = `${company?.id || phoneNumberId}:${from}`;
+function scheduleInactivity({ company, from }) {
+  const key = `${company?.id}:${from}`;
 
   if (timers.has(key)) {
     clearTimeout(timers.get(key));
@@ -217,7 +200,7 @@ function scheduleInactivity({ company, from, phoneNumberId }) {
       });
 
       await sendSafe({
-        phoneNumberId,
+        company,
         to: from,
         message
       });
@@ -252,15 +235,7 @@ export async function handleIncomingMessage(payload) {
     console.log("[ORCHESTRATOR] company:", company?.id || company?.name || company?.nome);
 
     if (!company) {
-      const reply =
-        "Ora pois, não consegui reconhecer esta companhia por estas bandas. Peço que tente novamente mais tarde.";
-
-      await sendSafe({
-        phoneNumberId,
-        to: from,
-        message: reply
-      });
-
+      console.error("[ORCHESTRATOR] Empresa não encontrada para phoneNumberId:", phoneNumberId);
       return { success: false, reason: "Empresa não encontrada" };
     }
 
@@ -282,12 +257,12 @@ export async function handleIncomingMessage(payload) {
       });
 
       await sendSafe({
-        phoneNumberId,
+        company,
         to: from,
         message: reply
       });
 
-      scheduleInactivity({ company, from, phoneNumberId });
+      scheduleInactivity({ company, from });
 
       return { success: true, type: "audio_blocked" };
     }
@@ -311,12 +286,12 @@ export async function handleIncomingMessage(payload) {
       });
 
       await sendSafe({
-        phoneNumberId,
+        company,
         to: from,
         message: reply
       });
 
-      scheduleInactivity({ company, from, phoneNumberId });
+      scheduleInactivity({ company, from });
 
       return { success: true, type: "empty_text" };
     }
@@ -339,12 +314,12 @@ export async function handleIncomingMessage(payload) {
       });
 
       await sendSafe({
-        phoneNumberId,
+        company,
         to: from,
         message: reply
       });
 
-      scheduleInactivity({ company, from, phoneNumberId });
+      scheduleInactivity({ company, from });
 
       return { success: true, type: "simple_conversation" };
     }
@@ -370,12 +345,12 @@ export async function handleIncomingMessage(payload) {
     });
 
     await sendSafe({
-      phoneNumberId,
+      company,
       to: from,
       message: finalReply
     });
 
-    scheduleInactivity({ company, from, phoneNumberId });
+    scheduleInactivity({ company, from });
 
     return { success: true, type: "ai_response" };
   } catch (error) {

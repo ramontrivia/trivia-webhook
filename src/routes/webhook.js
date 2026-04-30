@@ -19,13 +19,15 @@ router.get("/webhook", (req, res) => {
 });
 
 router.post("/webhook", async (req, res) => {
-  res.sendStatus(200);
-
   console.log("🔥 WEBHOOK POST RECEBIDO");
 
-  await handleIncomingMessage({
-    body: req.body
-  });
+  res.sendStatus(200);
+
+  try {
+    await handleIncomingMessage(req.body);
+  } catch (error) {
+    console.error("ERRO AO PROCESSAR WEBHOOK:", error);
+  }
 });
 
 export default router;

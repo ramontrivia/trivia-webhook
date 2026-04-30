@@ -363,3 +363,5 @@ export {
   handleIncomingMessage as processIncomingMessage,
   handleIncomingMessage as orchestrateMessage
 };
+
+export default handleIncomingMessage;

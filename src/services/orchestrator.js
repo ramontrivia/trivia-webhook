@@ -6,11 +6,7 @@ import * as WhatsApp from "./whatsapp.js";
 
 const timers = new Map();
 
-const getCompany =
-  Companies.getCompanyByPhoneId ||
-  Companies.findCompanyByPhoneId ||
-  Companies.getCompany ||
-  Companies.default;
+const getCompany = Companies.getCompanyByPhoneNumber;
 
 const generateResponse =
   OpenAI.generateResponse ||
@@ -116,15 +112,10 @@ function buildContext(items = []) {
 
 async function getCompanySafe(phoneNumberId) {
   if (typeof getCompany !== "function") {
-    throw new Error("Função de empresa não encontrada em companies.js");
+    throw new Error("Função getCompanyByPhoneNumber não encontrada em companies.js");
   }
 
-  try {
-    return await getCompany(phoneNumberId);
-  } catch (error) {
-    console.error("[ORCHESTRATOR] getCompany formato texto falhou:", error.message);
-    return await getCompany({ phone_id: phoneNumberId, phoneNumberId });
-  }
+  return await getCompany(phoneNumberId);
 }
 
 async function saveSafe({ company, from, content, role }) {

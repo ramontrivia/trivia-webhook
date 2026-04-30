@@ -357,12 +357,9 @@ export async function handleIncomingMessage(payload) {
 }
 
 export {
-  handleIncomingMessage,
   handleIncomingMessage as handleMessage,
   handleIncomingMessage as handleWebhook,
   handleIncomingMessage as processMessage,
   handleIncomingMessage as processIncomingMessage,
   handleIncomingMessage as orchestrateMessage
 };
-
-export default handleIncomingMessage;

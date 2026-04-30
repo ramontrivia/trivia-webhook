@@ -5,6 +5,7 @@ import * as OpenAI from "./openai.js";
 import * as WhatsApp from "./whatsapp.js";
 
 const getCompany =
+  Companies.getCompanyByPhoneNumber ||
   Companies.getCompanyByPhoneId ||
   Companies.findCompanyByPhoneId ||
   Companies.getCompany ||

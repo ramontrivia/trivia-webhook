@@ -4,35 +4,71 @@ import * as Commerces from "./commerces.js";
 import * as OpenAI from "./openai.js";
 import * as WhatsApp from "./whatsapp.js";
 
-const getCompany =
-  Companies.getCompanyByPhoneId ||
-  Companies.findCompanyByPhoneId ||
-  Companies.getCompany ||
-  Companies.default;
+function pickFunction(moduleObject, names = []) {
+  for (const name of names) {
+    if (typeof moduleObject[name] === "function") {
+      return moduleObject[name];
+    }
+  }
 
-const saveMessage =
-  Messages.saveMessage ||
-  Messages.createMessage ||
-  Messages.insertMessage ||
-  Messages.default;
+  if (typeof moduleObject.default === "function") {
+    return moduleObject.default;
+  }
 
-const searchCommerces =
-  Commerces.searchCommerces ||
-  Commerces.findCommerces ||
-  Commerces.searchCommerce ||
-  Commerces.default;
+  const functionExports = Object.values(moduleObject).filter(
+    (value) => typeof value === "function"
+  );
 
-const generateResponse =
-  OpenAI.generateResponse ||
-  OpenAI.generateAIResponse ||
-  OpenAI.askOpenAI ||
-  OpenAI.default;
+  if (functionExports.length === 1) {
+    return functionExports[0];
+  }
 
-const sendMessage =
-  WhatsApp.sendWhatsAppMessage ||
-  WhatsApp.sendMessage ||
-  WhatsApp.sendTextMessage ||
-  WhatsApp.default;
+  return null;
+}
+
+const getCompany = pickFunction(Companies, [
+  "getCompanyByPhoneId",
+  "getCompanyByPhoneNumberId",
+  "findCompanyByPhoneId",
+  "findCompanyByPhoneNumberId",
+  "getCompanyByMetaPhoneId",
+  "findCompanyByMetaPhoneId",
+  "getCompanyByWhatsappPhoneId",
+  "findCompanyByWhatsappPhoneId",
+  "getCompany",
+  "findCompany",
+  "getCompanyByPhone",
+  "findCompanyByPhone",
+  "companyByPhoneId"
+]);
+
+const saveMessage = pickFunction(Messages, [
+  "saveMessage",
+  "createMessage",
+  "insertMessage",
+  "addMessage"
+]);
+
+const searchCommerces = pickFunction(Commerces, [
+  "searchCommerces",
+  "findCommerces",
+  "searchCommerce",
+  "getCommerces",
+  "buscarComercios"
+]);
+
+const generateResponse = pickFunction(OpenAI, [
+  "generateResponse",
+  "generateAIResponse",
+  "askOpenAI"
+]);
+
+const sendMessage = pickFunction(WhatsApp, [
+  "sendWhatsAppMessage",
+  "sendMessage",
+  "sendTextMessage",
+  "sendWhatsappMessage"
+]);
 
 function normalize(text = "") {
   return String(text)
@@ -59,7 +95,7 @@ function isAudio(message) {
 function isSimpleConversation(text) {
   const msg = normalize(text);
 
-  return [
+  const simple = [
     "oi",
     "ola",
     "olá",
@@ -72,23 +108,28 @@ function isSimpleConversation(text) {
     "obrigado",
     "obrigada",
     "valeu",
-    "ok"
-  ].some((item) => msg === normalize(item));
+    "ok",
+    "tchau",
+    "ate mais",
+    "até mais"
+  ];
+
+  return simple.some((item) => msg === normalize(item));
 }
 
 function simpleReply(text) {
   const msg = normalize(text);
 
   if (msg.includes("bom dia")) {
-    return "Bom dia, nobre vosmecê! Ora pois, este bandeirante está por estas bandas recolhendo informações da cidade. Em que posso lhe servir?";
+    return "Bom dia, nobre vosmecê! Ora pois, sigo por estas bandas recolhendo informações da cidade. Diga-me o que procura, que hei de tentar ajudar.";
   }
 
   if (msg.includes("boa tarde")) {
     return "Boa tarde, estimado vosmecê! Sigo reconhecendo estas paragens e posso lhe ajudar com informações da cidade. Diga-me, pois, o que procura?";
   }
 
-  if (msg.includes("boa noite")) {
-    return "Boa noite, nobre alma! Este velho bandeirante segue atento por estas terras. Conte-me, pois, em que posso ajudar vosmecê?";
+  if (msg.includes("boa noite") || msg.includes("tchau")) {
+    return "Boa noite, nobre pessoa. Que vosmecê siga em paz por estas bandas. Quando precisar, este bandeirante estará por aqui.";
   }
 
   if (msg.includes("obrigad") || msg === "valeu") {
@@ -140,8 +181,39 @@ function buildContext(items = []) {
     .join("\n");
 }
 
+async function getCompanySafe(phoneNumberId) {
+  console.log("[ORCHESTRATOR] Exports companies.js:", Object.keys(Companies));
+
+  if (typeof getCompany !== "function") {
+    throw new Error(
+      "Função de empresa não encontrada em companies.js. Exports disponíveis: " +
+        Object.keys(Companies).join(", ")
+    );
+  }
+
+  try {
+    return await getCompany(phoneNumberId);
+  } catch (error1) {
+    console.error("[ORCHESTRATOR] Empresa formato texto falhou:", error1.message);
+  }
+
+  try {
+    return await getCompany({
+      phone_id: phoneNumberId,
+      phoneNumberId,
+      phone_number_id: phoneNumberId
+    });
+  } catch (error2) {
+    console.error("[ORCHESTRATOR] Empresa formato objeto falhou:", error2.message);
+    throw error2;
+  }
+}
+
 async function saveSafe(data) {
-  if (typeof saveMessage !== "function") return;
+  if (typeof saveMessage !== "function") {
+    console.error("[ORCHESTRATOR] saveMessage não encontrado:", Object.keys(Messages));
+    return;
+  }
 
   try {
     await saveMessage(data);
@@ -152,7 +224,10 @@ async function saveSafe(data) {
 
 async function sendSafe({ phoneNumberId, to, message }) {
   if (typeof sendMessage !== "function") {
-    throw new Error("Função de envio não encontrada em whatsapp.js");
+    throw new Error(
+      "Função de envio não encontrada em whatsapp.js. Exports disponíveis: " +
+        Object.keys(WhatsApp).join(", ")
+    );
   }
 
   try {
@@ -179,20 +254,11 @@ async function sendSafe({ phoneNumberId, to, message }) {
   await sendMessage(to, message, phoneNumberId);
 }
 
-async function getCompanySafe(phoneNumberId) {
-  if (typeof getCompany !== "function") {
-    throw new Error("Função de empresa não encontrada em companies.js");
-  }
-
-  try {
-    return await getCompany(phoneNumberId);
-  } catch {
-    return await getCompany({ phone_id: phoneNumberId, phoneNumberId });
-  }
-}
-
 async function searchSafe({ company, text, healthPriority }) {
-  if (typeof searchCommerces !== "function") return [];
+  if (typeof searchCommerces !== "function") {
+    console.error("[ORCHESTRATOR] searchCommerces não encontrado:", Object.keys(Commerces));
+    return [];
+  }
 
   try {
     const result = await searchCommerces({

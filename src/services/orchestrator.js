@@ -1,12 +1,26 @@
 import * as Companies from "./companies.js";
-import { saveMessage } from "./messages.js";
-import { searchCommerces } from "./commerces.js";
+import * as Messages from "./messages.js";
+import * as Commerces from "./commerces.js";
 import * as OpenAI from "./openai.js";
 import * as WhatsApp from "./whatsapp.js";
 
-const timers = new Map();
+const getCompany =
+  Companies.getCompanyByPhoneId ||
+  Companies.findCompanyByPhoneId ||
+  Companies.getCompany ||
+  Companies.default;
 
-const getCompany = Companies.getCompanyByPhoneNumber;
+const saveMessage =
+  Messages.saveMessage ||
+  Messages.createMessage ||
+  Messages.insertMessage ||
+  Messages.default;
+
+const searchCommerces =
+  Commerces.searchCommerces ||
+  Commerces.findCommerces ||
+  Commerces.searchCommerce ||
+  Commerces.default;
 
 const generateResponse =
   OpenAI.generateResponse ||
@@ -15,9 +29,9 @@ const generateResponse =
   OpenAI.default;
 
 const sendMessage =
-  WhatsApp.sendTextMessage ||
   WhatsApp.sendWhatsAppMessage ||
   WhatsApp.sendMessage ||
+  WhatsApp.sendTextMessage ||
   WhatsApp.default;
 
 function normalize(text = "") {
@@ -88,6 +102,22 @@ function audioReply() {
   return "Ora pois, nobre vosmecê, ainda não consigo escutar mensagens de áudio. Peço que me envie por escrito, que este bandeirante há de lhe responder com gosto.";
 }
 
+function isHealthQuestion(text) {
+  const msg = normalize(text);
+
+  return [
+    "saude",
+    "posto",
+    "ubs",
+    "hospital",
+    "upa",
+    "pronto atendimento",
+    "medico",
+    "consulta",
+    "secretaria de saude"
+  ].some((term) => msg.includes(term));
+}
+
 function buildContext(items = []) {
   if (!Array.isArray(items) || items.length === 0) {
     return "Nenhum registro encontrado no banco de dados para esta busca.";
@@ -110,108 +140,109 @@ function buildContext(items = []) {
     .join("\n");
 }
 
-async function getCompanySafe(phoneNumberId) {
-  if (typeof getCompany !== "function") {
-    throw new Error("Função getCompanyByPhoneNumber não encontrada em companies.js");
-  }
+async function saveSafe(data) {
+  if (typeof saveMessage !== "function") return;
 
-  return await getCompany(phoneNumberId);
-}
-
-async function saveSafe({ company, from, content, role }) {
   try {
-    await saveMessage({
-      company,
-      from,
-      content,
-      role
-    });
+    await saveMessage(data);
   } catch (error) {
-    console.error("[ORCHESTRATOR] Erro ao salvar mensagem:", error.message);
+    console.error("[ORCHESTRATOR] Erro ao salvar:", error.message);
   }
 }
 
-async function sendSafe({ company, to, message }) {
+async function sendSafe({ phoneNumberId, to, message }) {
   if (typeof sendMessage !== "function") {
     throw new Error("Função de envio não encontrada em whatsapp.js");
   }
 
-  console.log("[ORCHESTRATOR] Enviando mensagem para:", to);
+  try {
+    await sendMessage({
+      phoneNumberId,
+      phone_number_id: phoneNumberId,
+      to,
+      message,
+      text: message,
+      body: message
+    });
+    return;
+  } catch (error) {
+    console.error("[ORCHESTRATOR] Envio objeto falhou:", error.message);
+  }
 
-  await sendMessage({
-    company,
-    to,
-    text: message
-  });
+  try {
+    await sendMessage(phoneNumberId, to, message);
+    return;
+  } catch (error) {
+    console.error("[ORCHESTRATOR] Envio argumentos falhou:", error.message);
+  }
+
+  await sendMessage(to, message, phoneNumberId);
 }
 
-async function searchSafe(text) {
+async function getCompanySafe(phoneNumberId) {
+  if (typeof getCompany !== "function") {
+    throw new Error("Função de empresa não encontrada em companies.js");
+  }
+
   try {
-    const result = await searchCommerces(text);
+    return await getCompany(phoneNumberId);
+  } catch {
+    return await getCompany({ phone_id: phoneNumberId, phoneNumberId });
+  }
+}
+
+async function searchSafe({ company, text, healthPriority }) {
+  if (typeof searchCommerces !== "function") return [];
+
+  try {
+    const result = await searchCommerces({
+      company_id: company.id,
+      companyId: company.id,
+      query: text,
+      text,
+      limit: 50,
+      healthPriority
+    });
+
     return Array.isArray(result) ? result : result?.data || result?.items || [];
   } catch (error) {
-    console.error("[ORCHESTRATOR] Erro ao buscar comércios:", error.message);
+    console.error("[ORCHESTRATOR] Busca objeto falhou:", error.message);
+  }
+
+  try {
+    const result = await searchCommerces(text, company.id, 50, healthPriority);
+    return Array.isArray(result) ? result : result?.data || result?.items || [];
+  } catch (error) {
+    console.error("[ORCHESTRATOR] Busca argumentos falhou:", error.message);
     return [];
   }
 }
 
-async function generateSafe({ text, context, company }) {
+async function generateSafe({ text, context, company, from, healthPriority }) {
   if (typeof generateResponse !== "function") {
     return null;
   }
 
   try {
     return await generateResponse({
+      text,
       userMessage: text,
       message: text,
-      prompt: text,
       context,
-      company
+      company,
+      from,
+      healthPriority
     });
   } catch (error) {
-    console.error("[ORCHESTRATOR] OpenAI por objeto falhou:", error.message);
+    console.error("[ORCHESTRATOR] OpenAI objeto falhou:", error.message);
   }
 
   try {
     return await generateResponse(text, context, company);
   } catch (error) {
-    console.error("[ORCHESTRATOR] OpenAI por argumentos falhou:", error.message);
+    console.error("[ORCHESTRATOR] OpenAI argumentos falhou:", error.message);
     return null;
   }
-}
-
-function scheduleInactivity({ company, from }) {
-  const key = `${company?.id}:${from}`;
-
-  if (timers.has(key)) {
-    clearTimeout(timers.get(key));
-  }
-
-  const timer = setTimeout(async () => {
-    try {
-      const message =
-        "Ora pois, nobre vosmecê, sigo por aqui caso ainda precise de ajuda. Este bandeirante continua recolhendo informações pela cidade.";
-
-      await saveSafe({
-        company,
-        from,
-        role: "assistant",
-        content: message
-      });
-
-      await sendSafe({
-        company,
-        to: from,
-        message
-      });
-    } catch (error) {
-      console.error("[ORCHESTRATOR] Erro na mensagem de inatividade:", error.message);
-    } finally {
-      timers.delete(key);
-    }
-  }, 5 * 60 * 1000);
-
-  timers.set(key, timer);
 }
 
 export async function handleIncomingMessage(payload) {
@@ -226,16 +257,19 @@ export async function handleIncomingMessage(payload) {
     console.log("[ORCHESTRATOR] text:", text);
 
     if (!phoneNumberId || !message || !from) {
-      console.log("[ORCHESTRATOR] Payload ignorado");
       return { success: true, ignored: true };
     }
 
     const company = await getCompanySafe(phoneNumberId);
 
-    console.log("[ORCHESTRATOR] company:", company?.id || company?.name || company?.nome);
-
     if (!company) {
-      console.error("[ORCHESTRATOR] Empresa não encontrada para phoneNumberId:", phoneNumberId);
+      await sendSafe({
+        phoneNumberId,
+        to: from,
+        message:
+          "Ora pois, não consegui reconhecer esta companhia por estas bandas. Peço que tente novamente mais tarde."
+      });
+
       return { success: false, reason: "Empresa não encontrada" };
     }
 
@@ -243,26 +277,20 @@ export async function handleIncomingMessage(payload) {
       const reply = audioReply();
 
       await saveSafe({
-        company,
-        from,
+        company_id: company.id,
+        phone: from,
         role: "user",
         content: "[ÁUDIO]"
       });
 
       await saveSafe({
-        company,
-        from,
+        company_id: company.id,
+        phone: from,
         role: "assistant",
         content: reply
       });
 
-      await sendSafe({
-        company,
-        to: from,
-        message: reply
-      });
-
-      scheduleInactivity({ company, from });
+      await sendSafe({ phoneNumberId, to: from, message: reply });
 
       return { success: true, type: "audio_blocked" };
     }
@@ -272,33 +300,27 @@ export async function handleIncomingMessage(payload) {
         "Ora pois, nobre vosmecê, recebi sua mensagem, mas não consegui entender o conteúdo. Envie-me por escrito o que procura, por gentileza.";
 
       await saveSafe({
-        company,
-        from,
+        company_id: company.id,
+        phone: from,
         role: "user",
         content: "[MENSAGEM SEM TEXTO]"
       });
 
       await saveSafe({
-        company,
-        from,
+        company_id: company.id,
+        phone: from,
         role: "assistant",
         content: reply
       });
 
-      await sendSafe({
-        company,
-        to: from,
-        message: reply
-      });
-
-      scheduleInactivity({ company, from });
+      await sendSafe({ phoneNumberId, to: from, message: reply });
 
       return { success: true, type: "empty_text" };
     }
 
     await saveSafe({
-      company,
-      from,
+      company_id: company.id,
+      phone: from,
       role: "user",
       content: text
     });
@@ -307,30 +329,33 @@ export async function handleIncomingMessage(payload) {
       const reply = simpleReply(text);
 
       await saveSafe({
-        company,
-        from,
+        company_id: company.id,
+        phone: from,
         role: "assistant",
         content: reply
       });
 
-      await sendSafe({
-        company,
-        to: from,
-        message: reply
-      });
-
-      scheduleInactivity({ company, from });
+      await sendSafe({ phoneNumberId, to: from, message: reply });
 
       return { success: true, type: "simple_conversation" };
     }
 
-    const commerces = await searchSafe(text);
+    const healthPriority = isHealthQuestion(text);
+
+    const commerces = await searchSafe({
+      company,
+      text,
+      healthPriority
+    });
+
     const context = buildContext(commerces);
 
     const aiReply = await generateSafe({
       text,
       context,
-      company
+      company,
+      from,
+      healthPriority
     });
 
     const finalReply =
@@ -338,24 +363,22 @@ export async function handleIncomingMessage(payload) {
       "Ora pois, nobre vosmecê, não encontrei informação segura o bastante para lhe responder sem risco de inventar. Posso tentar buscar por outro nome ou referência.";
 
     await saveSafe({
-      company,
-      from,
+      company_id: company.id,
+      phone: from,
       role: "assistant",
       content: finalReply
     });
 
-    await sendSafe({
-      company,
-      to: from,
-      message: finalReply
-    });
-
-    scheduleInactivity({ company, from });
+    await sendSafe({ phoneNumberId, to: from, message: finalReply });
 
     return { success: true, type: "ai_response" };
   } catch (error) {
     console.error("[ORCHESTRATOR] ERRO GERAL:", error);
-    return { success: false, error: error.message };
+
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 

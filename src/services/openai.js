@@ -58,7 +58,7 @@ export async function generateResponse({
 
     if (!OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY AUSENTE");
-      return "Ora pois… falta-me a chave desta engenhoca para responder direito agora.";
+      return "Erro de configuração.";
     }
 
     const finalText = String(text || userMessage || message || "").trim();
@@ -66,6 +66,7 @@ export async function generateResponse({
     const rawHistory = await getConversationHistory({ company, from });
     const history = normalizeHistory(rawHistory);
 
+    // 🔥 AGORA A PERSONALIDADE VEM DO CLIENTE
     const knowledge = loadKnowledge(company?.client_key);
 
     const hasAssistantMessage = history.some(
@@ -75,80 +76,38 @@ export async function generateResponse({
     const cityContext =
       context && String(context).trim().length > 0
         ? String(context).trim()
-        : "Nenhuma informação específica foi encontrada no banco para esta pergunta.";
+        : "Nenhuma informação específica foi encontrada no banco.";
 
     const systemPrompt = `
-Você é Mateus Leme, bandeirante antigo que voltou há pouco tempo às terras de Mateus Leme.
+${knowledge}
 
-Você NÃO é assistente virtual.
-Você NÃO é robô.
-Você NÃO fala como atendimento moderno.
+REGRAS GERAIS DO SISTEMA:
 
-Fale com jeito antigo, respeitoso, curioso e compreensível.
-Use expressões como "vosmecê", "ora pois", "pois veja", "por estas bandas", "lhe digo", "hei de".
-Não use markdown.
-Não use títulos.
-Não use negrito.
-Não responda seco.
+- Nunca invente telefone
+- Nunca invente endereço
+- Nunca invente horário
+- Nunca invente preço
+- Use apenas dados fornecidos
 
-REGRA PRINCIPAL:
-Se o usuário pedir telefone, endereço, horário, comércio, serviço, saúde, escola, restaurante, loja ou qualquer informação prática, NÃO faça apresentação longa.
-Responda diretamente usando os dados encontrados.
-
-PRIMEIRO CONTATO:
-Só se apresente se a primeira mensagem for apenas saudação, como "oi", "bom dia", "boa noite".
-Se a primeira mensagem já tiver pedido útil, responda ao pedido.
-
-DADOS ENCONTRADOS NO BANCO:
+DADOS DO BANCO:
 ${cityContext}
 
-BASE DE CONHECIMENTO:
-${knowledge || "Ainda há pouca informação registrada nesta base."}
-
-REGRAS SOBRE DADOS:
-- Nunca invente telefone.
-- Nunca invente endereço.
-- Nunca invente horário.
-- Nunca invente preço.
-- Nunca invente nome de comércio.
-- Use somente dados que estejam no banco ou na base de conhecimento.
-- Se houver dados encontrados e forem relevantes, cite nome, telefone, endereço e horário quando existirem.
-- Se não houver telefone, diga que o telefone não está registrado.
-- Se não houver endereço, diga que o endereço não está registrado.
-- Se não encontrou nada, diga com humanidade que ainda não há registro firme.
-
-SAÚDE:
-- Não dê diagnóstico.
-- Não indique remédio.
-- Em urgência, oriente procurar atendimento imediato ou ligar 192.
-- Priorize serviço público quando houver.
-
-ESTILO QUANDO ENCONTRAR:
-Exemplo:
-"Pois veja, boa alma… encontrei em minha agenda este registro por estas bandas:
-
-Nome: ...
-Telefone: ...
-Endereço: ...
-
-Se vosmecê quiser, posso seguir procurando outros próximos."
-
-ESTILO QUANDO NÃO ENCONTRAR:
-"Pois veja, boa alma… procurei em minha agenda, mas ainda não tenho registro firme desse lugar. Não vou lhe passar telefone nem endereço de orelhada, para não inventar notícia."
+Se houver dados, use.
+Se não houver, diga com naturalidade que ainda não possui informação.
 `;
 
     let userContent = finalText;
 
     if (!hasAssistantMessage && isGreetingOnly(finalText)) {
-      userContent = `Esta é a primeira mensagem da pessoa e é apenas uma saudação. Apresente-se brevemente como Mateus Leme retornando à cidade. Mensagem: ${finalText}`;
+      userContent = `Primeiro contato do usuário. Responda de forma natural conforme sua personalidade. Mensagem: ${finalText}`;
     }
 
     if (!hasAssistantMessage && !isGreetingOnly(finalText)) {
-      userContent = `Esta é a primeira mensagem da pessoa, mas ela já fez um pedido útil. Não faça apresentação longa. Responda diretamente ao pedido usando os dados encontrados. Pedido: ${finalText}`;
+      userContent = `Primeira mensagem com pedido. Responda direto ao ponto usando os dados disponíveis. Pedido: ${finalText}`;
     }
 
     if (healthPriority) {
-      userContent += "\n\nA pergunta parece ser sobre saúde. Priorize serviços públicos se aparecerem nos dados.";
+      userContent += "\nPriorizar serviços públicos se for saúde.";
     }
 
     const messages = [
@@ -162,7 +121,7 @@ ESTILO QUANDO NÃO ENCONTRAR:
       {
         model: OPENAI_MODEL,
         messages,
-        temperature: 0.45
+        temperature: 0.4
       },
       {
         headers: {
@@ -177,17 +136,10 @@ ESTILO QUANDO NÃO ENCONTRAR:
 
     console.log("RESPOSTA:", reply);
 
-    return (
-      reply ||
-      "Ora pois… por um instante me faltaram as palavras. Chame-me de novo, que torno à prosa."
-    );
+    return reply || "Não consegui responder agora.";
   } catch (err) {
-    console.error("ERRO OPENAI:", {
-      message: err?.message,
-      status: err?.response?.status,
-      data: err?.response?.data
-    });
+    console.error("ERRO OPENAI:", err.message);
 
-    return "Ora pois… tive um tropeço nessas engenhocas modernas. Chame-me novamente daqui a pouco.";
+    return "Erro ao gerar resposta.";
   }
 }

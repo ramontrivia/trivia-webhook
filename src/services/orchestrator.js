@@ -3,37 +3,20 @@ import * as Messages from "./messages.js";
 import * as OpenAI from "./openai.js";
 import * as WhatsApp from "./whatsapp.js";
 
-const getCompany =
-  Companies.getCompanyByPhoneNumber ||
-  Companies.default;
-
-const saveMessage =
-  Messages.saveMessage ||
-  Messages.default;
-
-const generateResponse =
-  OpenAI.generateResponse ||
-  OpenAI.default;
-
-const sendMessage =
-  WhatsApp.sendTextMessage ||
-  WhatsApp.default;
+const getCompany = Companies.getCompanyByPhoneNumber || Companies.default;
+const saveMessage = Messages.saveMessage || Messages.default;
+const generateResponse = OpenAI.generateResponse || OpenAI.default;
+const sendMessage = WhatsApp.sendTextMessage || WhatsApp.default;
 
 function getPayload(payload) {
   const value = payload?.entry?.[0]?.changes?.[0]?.value;
 
-  const phoneNumberId = value?.metadata?.phone_number_id;
-  const message = value?.messages?.[0];
-  const from = message?.from;
-  const text = message?.text?.body || "";
-
-  console.log("📦 PAYLOAD EXTRAÍDO:", {
-    phoneNumberId,
-    from,
-    text
-  });
-
-  return { phoneNumberId, message, from, text };
+  return {
+    phoneNumberId: value?.metadata?.phone_number_id,
+    message: value?.messages?.[0],
+    from: value?.messages?.[0]?.from,
+    text: value?.messages?.[0]?.text?.body || ""
+  };
 }
 
 function isGreeting(text = "") {
@@ -41,43 +24,42 @@ function isGreeting(text = "") {
   return ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"].includes(msg);
 }
 
-function simpleReply(text) {
+function simpleReply() {
   return "Ora pois, saudações a vosmecê! Diga-me o que procura por estas bandas.";
 }
 
 async function getCompanySafe(phoneNumberId) {
-  const raw = await getCompany(phoneNumberId);
+  const company = await getCompany(phoneNumberId);
 
-  console.log("🏢 COMPANY RAW:", raw);
+  console.log("🏢 COMPANY RAW:", company);
 
-  if (!raw) return null;
+  if (!company) return null;
 
   return {
-    ...raw,
-    id: raw.id,
-    company_id: raw.company_id || raw.id,
-    client_key: raw.client_key || String(raw.id),
-    phone_number_id:
-      raw.phone_number_id ||
-      raw.phoneNumberId ||
-      phoneNumberId
+    ...company,
+    company_id: company.id,
+    client_key: company.client_key || String(company.id),
+    phone_number_id: company.phone_number_id || phoneNumberId
   };
 }
 
 async function saveSafe({ company, from, role, content }) {
   try {
     await saveMessage({
-      company_id: company.company_id,
+      company_id: company.id,
       client_key: company.client_key,
       from,
       phone: from,
       role,
-      content
+      content,
+      message: content
     });
-
-    console.log("💾 SALVO:", role, content);
   } catch (err) {
-    console.log("❌ ERRO SAVE:", err.message);
+    console.log("❌ ERRO SAVE:", {
+      message: err.message,
+      details: err.details,
+      code: err.code
+    });
   }
 }
 
@@ -85,8 +67,13 @@ async function sendSafe({ company, to, message }) {
   try {
     console.log("📤 ENVIANDO:", message);
 
-    await sendMessage(company, to, message);
-
+    await sendMessage({
+      company,
+      to,
+      message,
+      text: message,
+      body: message
+    });
   } catch (err) {
     console.log("❌ ERRO SEND:", err.message);
   }
@@ -98,14 +85,14 @@ export async function handleIncomingMessage(payload) {
 
     const { phoneNumberId, message, from, text } = getPayload(payload);
 
-    // 🔥 NÃO BLOQUEIA MAIS SILENCIOSAMENTE
-    if (!phoneNumberId) {
-      console.log("❌ phoneNumberId ausente");
-      return;
-    }
+    console.log("📦 PAYLOAD EXTRAÍDO:", {
+      phoneNumberId,
+      from,
+      text
+    });
 
-    if (!from) {
-      console.log("❌ from ausente");
+    if (!phoneNumberId || !message || !from) {
+      console.log("❌ Payload incompleto");
       return;
     }
 
@@ -126,7 +113,7 @@ export async function handleIncomingMessage(payload) {
     let reply;
 
     if (isGreeting(text)) {
-      reply = simpleReply(text);
+      reply = simpleReply();
     } else {
       reply = await generateResponse({
         text,
@@ -151,7 +138,6 @@ export async function handleIncomingMessage(payload) {
       to: from,
       message: reply
     });
-
   } catch (error) {
     console.error("💥 ERRO GERAL:", error);
   }

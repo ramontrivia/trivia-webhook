@@ -4,13 +4,30 @@ export async function saveMessage({
   company,
   from,
   content,
-  role
+  role,
+  intent = null
 }) {
   try {
-    console.log("SALVANDO MENSAGEM:", {
-      company_id: company?.id,
+    if (!company) {
+      console.error("❌ SAVE MESSAGE: company ausente");
+      return false;
+    }
+
+    const companyId = company.company_id || company.id;
+    const clientKey = company.client_key || String(companyId);
+
+    if (!companyId || !clientKey) {
+      console.error("❌ SAVE MESSAGE: company_id ou client_key ausente", {
+        companyId,
+        clientKey
+      });
+      return false;
+    }
+
+    console.log("💾 SALVANDO MENSAGEM:", {
+      company_id: companyId,
+      client_key: clientKey,
       from,
-      content,
       role
     });
 
@@ -18,20 +35,20 @@ export async function saveMessage({
       .from("messages")
       .insert([
         {
-          company_id: company?.id || null,
-          client_key: company?.client_key || null,
-          company_name: company?.name || null,
+          company_id: companyId,
+          client_key: clientKey,
+          company_name: company.name || company.nome || null,
           user_phone: from,
           direction: role,
           message: content,
-          role: role,
-          intent: null
+          role,
+          intent
         }
       ])
       .select();
 
     if (error) {
-      console.error("ERRO AO SALVAR:", {
+      console.error("❌ ERRO AO SALVAR:", {
         message: error.message,
         details: error.details,
         hint: error.hint,
@@ -41,11 +58,10 @@ export async function saveMessage({
       return false;
     }
 
-    console.log("SALVO COM SUCESSO:", data);
+    console.log("✅ MENSAGEM SALVA:", data?.[0]?.id || true);
     return true;
-
   } catch (err) {
-    console.error("ERRO GERAL SAVE:", err);
+    console.error("❌ ERRO GERAL SAVE:", err.message);
     return false;
   }
 }

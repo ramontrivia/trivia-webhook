@@ -54,19 +54,23 @@ export async function generateResponse({
   healthPriority
 }) {
   try {
-    console.log("GERANDO RESPOSTA...");
+    console.log("🧠 GERANDO RESPOSTA...");
 
     if (!OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY AUSENTE");
+      console.error("❌ OPENAI_API_KEY AUSENTE");
       return "Erro de configuração.";
     }
 
     const finalText = String(text || userMessage || message || "").trim();
 
+    if (!finalText) {
+      return "Não consegui entender sua mensagem.";
+    }
+
     const rawHistory = await getConversationHistory({ company, from });
     const history = normalizeHistory(rawHistory);
 
-    // 🔥 AGORA A PERSONALIDADE VEM DO CLIENTE
+    // 🔥 PERSONALIDADE DO CLIENTE
     const knowledge = loadKnowledge(company?.client_key);
 
     const hasAssistantMessage = history.some(
@@ -76,38 +80,37 @@ export async function generateResponse({
     const cityContext =
       context && String(context).trim().length > 0
         ? String(context).trim()
-        : "Nenhuma informação específica foi encontrada no banco.";
+        : "";
 
     const systemPrompt = `
-${knowledge}
+${knowledge || "Você é um assistente útil, direto e educado."}
 
-REGRAS GERAIS DO SISTEMA:
-
+REGRAS DO SISTEMA:
 - Nunca invente telefone
 - Nunca invente endereço
 - Nunca invente horário
 - Nunca invente preço
-- Use apenas dados fornecidos
+- Use somente dados fornecidos
 
-DADOS DO BANCO:
-${cityContext}
+${cityContext ? `DADOS ENCONTRADOS:\n${cityContext}` : ""}
 
 Se houver dados, use.
-Se não houver, diga com naturalidade que ainda não possui informação.
+Se não houver, responda com naturalidade sem inventar.
 `;
 
     let userContent = finalText;
 
+    // PRIMEIRO CONTATO
     if (!hasAssistantMessage && isGreetingOnly(finalText)) {
-      userContent = `Primeiro contato do usuário. Responda de forma natural conforme sua personalidade. Mensagem: ${finalText}`;
+      userContent = `Primeira interação do usuário (saudação). Responda conforme sua personalidade. Mensagem: ${finalText}`;
     }
 
     if (!hasAssistantMessage && !isGreetingOnly(finalText)) {
-      userContent = `Primeira mensagem com pedido. Responda direto ao ponto usando os dados disponíveis. Pedido: ${finalText}`;
+      userContent = `Primeira interação com pedido. Responda direto ao ponto. Pedido: ${finalText}`;
     }
 
     if (healthPriority) {
-      userContent += "\nPriorizar serviços públicos se for saúde.";
+      userContent += "\nSe for saúde, priorize serviços públicos.";
     }
 
     const messages = [
@@ -134,11 +137,15 @@ Se não houver, diga com naturalidade que ainda não possui informação.
 
     const reply = response.data?.choices?.[0]?.message?.content;
 
-    console.log("RESPOSTA:", reply);
+    console.log("💬 RESPOSTA:", reply);
 
     return reply || "Não consegui responder agora.";
   } catch (err) {
-    console.error("ERRO OPENAI:", err.message);
+    console.error("❌ ERRO OPENAI:", {
+      message: err?.message,
+      status: err?.response?.status,
+      data: err?.response?.data
+    });
 
     return "Erro ao gerar resposta.";
   }

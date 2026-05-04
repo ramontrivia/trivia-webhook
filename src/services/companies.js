@@ -11,7 +11,6 @@ export async function getCompanyByPhoneNumber(phoneNumberId) {
       .from("companies")
       .select("*")
       .eq("phone_number_id", phoneNumberId)
-      .eq("active", true)
       .limit(1)
       .maybeSingle();
 
@@ -25,7 +24,6 @@ export async function getCompanyByPhoneNumber(phoneNumberId) {
       return null;
     }
 
-    // 🔥 NORMALIZAÇÃO PADRÃO (ESSENCIAL PRA TODO O SISTEMA)
     return {
       ...data,
       id: data.id,

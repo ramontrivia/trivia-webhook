@@ -3,16 +3,16 @@ import * as Messages from "./messages.js";
 import * as Commerces from "./commerces.js";
 import * as OpenAI from "./openai.js";
 import * as WhatsApp from "./whatsapp.js";
+import { extractCommerceFromImage } from "./importer.js";
 
 const getCompany = Companies.getCompanyByPhoneNumber || Companies.default;
 const saveMessage = Messages.saveMessage || Messages.default;
 const searchCommerces = Commerces.searchCommerces || Commerces.default;
 const generateResponse = OpenAI.generateResponse || OpenAI.default;
 const sendMessage = WhatsApp.sendTextMessage || WhatsApp.default;
+const downloadMediaAsBase64 = WhatsApp.downloadMediaAsBase64;
 
-const ADMIN_PHONES = [
-  "553199646223"
-];
+const ADMIN_PHONES = ["553199646223"];
 
 function normalize(text = "") {
   return String(text)
@@ -39,6 +39,7 @@ function isAdmin(from) {
 
 function isAdminImportCommand(text) {
   const msg = normalize(text);
+
   return [
     "importar comercio",
     "importar comércio",
@@ -95,6 +96,27 @@ function buildContext(items = []) {
         .join(" | ");
     })
     .join("\n");
+}
+
+function formatImportPreview(result) {
+  const data = result?.extracted || {};
+
+  return [
+    "Imagem lida com sucesso. Encontrei estes dados:",
+    "",
+    `Nome: ${data.nome || "Não identificado"}`,
+    `Telefone: ${data.telefone || "Não identificado"}`,
+    `Endereço: ${data.endereco || "Não identificado"}`,
+    `Categoria: ${data.categoria || "Não identificada"}`,
+    `Tipo: ${data.tipo_google || "Não identificado"}`,
+    `Horário: ${data.horario || "Não identificado"}`,
+    `Instagram: ${data.instagram || "Não identificado"}`,
+    "",
+    `Search key: ${data.search_key || "Não gerada"}`,
+    "",
+    "Pré-cadastro salvo em commerce_imports como pendente.",
+    "Próximo passo será confirmar e gravar em commerces."
+  ].join("\n");
 }
 
 async function getCompanySafe(phoneNumberId) {
@@ -161,29 +183,77 @@ async function searchSafe({ company, text }) {
 
 async function handleAdminMessage({ company, from, text, message }) {
   if (isAdminImportCommand(text)) {
-    const reply =
-      "Modo de importação iniciado. Envie a foto do panfleto, fachada, cartão de visita ou material do comércio para eu preparar o cadastro.";
-
     await sendSafe({
       company,
       to: from,
-      message: reply
+      message:
+        "Modo de importação iniciado. Envie a foto do panfleto, fachada, cartão de visita ou material do comércio."
     });
 
     return true;
   }
 
   if (isImage(message)) {
-    const reply =
-      "Recebi a imagem. O próximo passo é ligar o serviço de leitura da imagem para extrair nome, telefone, endereço, categoria e preparar o cadastro antes de salvar no Supabase.";
+    try {
+      const mediaId = message?.image?.id;
 
-    await sendSafe({
-      company,
-      to: from,
-      message: reply
-    });
+      if (!mediaId) {
+        await sendSafe({
+          company,
+          to: from,
+          message: "Recebi a imagem, mas não encontrei o ID da mídia."
+        });
 
-    return true;
+        return true;
+      }
+
+      await sendSafe({
+        company,
+        to: from,
+        message: "Recebi a imagem. Vou ler os dados e preparar o cadastro."
+      });
+
+      const media = await downloadMediaAsBase64({
+        company,
+        mediaId
+      });
+
+      const result = await extractCommerceFromImage({
+        base64: media.base64,
+        mime_type: media.mime_type,
+        company,
+        from
+      });
+
+      if (!result.success) {
+        await sendSafe({
+          company,
+          to: from,
+          message: `Não consegui processar a imagem. Erro: ${result.error}`
+        });
+
+        return true;
+      }
+
+      await sendSafe({
+        company,
+        to: from,
+        message: formatImportPreview(result)
+      });
+
+      return true;
+    } catch (err) {
+      console.error("❌ ERRO IMPORTAÇÃO ADMIN:", err);
+
+      await sendSafe({
+        company,
+        to: from,
+        message:
+          "Tive um erro ao processar essa imagem. Verifique os logs do Railway."
+      });
+
+      return true;
+    }
   }
 
   return false;
@@ -222,9 +292,7 @@ export async function handleIncomingMessage(payload) {
         message
       });
 
-      if (handledByAdmin) {
-        return;
-      }
+      if (handledByAdmin) return;
     }
 
     if (isAudio(message)) {

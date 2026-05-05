@@ -24,12 +24,14 @@ function normalize(text = "") {
 
 function getPayload(payload) {
   const value = payload?.entry?.[0]?.changes?.[0]?.value;
+  const message = value?.messages?.[0];
 
   return {
     phoneNumberId: value?.metadata?.phone_number_id,
-    message: value?.messages?.[0],
-    from: value?.messages?.[0]?.from,
-    text: value?.messages?.[0]?.text?.body || ""
+    message,
+    from: message?.from,
+    text: message?.text?.body || "",
+    isStatusOnly: !message && Array.isArray(value?.statuses)
   };
 }
 
@@ -263,14 +265,20 @@ export async function handleIncomingMessage(payload) {
   try {
     console.log("🔥 WEBHOOK RECEBIDO");
 
-    const { phoneNumberId, message, from, text } = getPayload(payload);
+    const { phoneNumberId, message, from, text, isStatusOnly } = getPayload(payload);
 
     console.log("📦 PAYLOAD EXTRAÍDO:", {
       phoneNumberId,
       from,
       text,
-      type: message?.type
+      type: message?.type,
+      isStatusOnly
     });
+
+    if (isStatusOnly) {
+      console.log("ℹ️ Evento de status ignorado.");
+      return;
+    }
 
     if (!phoneNumberId || !message || !from) {
       console.log("❌ Payload incompleto");

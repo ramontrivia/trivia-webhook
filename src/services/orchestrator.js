@@ -70,44 +70,6 @@ function isAudio(message) {
   return message?.type === "audio" || Boolean(message?.audio);
 }
 
-function isHealthQuestion(text = "") {
-  const msg = normalize(text);
-
-  return [
-    "saude",
-    "posto",
-    "ubs",
-    "upa",
-    "hospital",
-    "pronto atendimento",
-    "medico",
-    "consulta",
-    "clinica",
-    "farmacia"
-  ].some((term) => msg.includes(term));
-}
-
-function buildContext(items = []) {
-  if (!Array.isArray(items) || items.length === 0) return "";
-
-  return items
-    .slice(0, 10)
-    .map((item, index) =>
-      [
-        `${index + 1}. Nome: ${item.nome || "Não informado"}`,
-        item.telefone ? `Telefone: ${item.telefone}` : null,
-        item.endereco ? `Endereço: ${item.endereco}` : null,
-        item.horario ? `Horário: ${item.horario}` : null,
-        item.tipo_google ? `Tipo: ${item.tipo_google}` : null,
-        item.search_key ? `Busca: ${item.search_key}` : null,
-        item.sales_copy ? `Destaque: ${item.sales_copy}` : null
-      ]
-        .filter(Boolean)
-        .join(" | ")
-    )
-    .join("\n");
-}
-
 function formatValue(value) {
   if (value === null || value === undefined || value === "") {
     return "Não identificado";
@@ -163,6 +125,28 @@ function formatImportPreview(result) {
     "",
     "Responda SALVAR IMPORTACAO para gravar em commerces.",
     "Ou CANCELAR IMPORTACAO para descartar."
+  ].join("\n");
+}
+
+function formatCommerceReply(items = []) {
+  const list = items.slice(0, 5).map((item, index) => {
+    const parts = [
+      `${index + 1}. ${item.nome || "Nome não informado"}`,
+      item.sales_copy ? item.sales_copy : null,
+      item.telefone ? `Telefone: ${item.telefone}` : "Telefone: não registrado",
+      item.endereco ? `Endereço: ${item.endereco}` : null,
+      item.horario ? `Horário: ${item.horario}` : null
+    ].filter(Boolean);
+
+    return parts.join("\n");
+  });
+
+  return [
+    "Pois veja, boa alma… encontrei estes registros em minha agenda por estas bandas:",
+    "",
+    list.join("\n\n"),
+    "",
+    "Se vosmecê desejar, posso seguir procurando outros nomes por estas mesmas paragens."
   ].join("\n");
 }
 
@@ -443,9 +427,8 @@ export async function handleIncomingMessage(payload) {
 
     const commerces = await searchSafe({ company, text });
 
-    if (!commerces || commerces.length === 0) {
-      const reply =
-        "Pois veja, boa alma… procurei em minha agenda, mas ainda não tenho registro firme sobre isso por estas bandas. Não hei de lhe passar indicação de orelhada, para não inventar notícia.";
+    if (commerces && commerces.length > 0) {
+      const reply = formatCommerceReply(commerces);
 
       await saveSafe({ company, from, role: "assistant", content: reply });
       await sendSafe({ company, to: from, message: reply });
@@ -453,18 +436,8 @@ export async function handleIncomingMessage(payload) {
       return;
     }
 
-    const healthPriority = isHealthQuestion(text);
-    const context = buildContext(commerces);
-
-    let reply = await generateResponse({
-      text,
-      context,
-      company,
-      from,
-      healthPriority
-    });
-
-    if (!reply) reply = "Não consegui responder agora.";
+    const reply =
+      "Pois veja, boa alma… procurei em minha agenda, mas ainda não tenho registro firme sobre isso por estas bandas. Não hei de lhe passar indicação de orelhada, para não inventar notícia.";
 
     await saveSafe({ company, from, role: "assistant", content: reply });
     await sendSafe({ company, to: from, message: reply });

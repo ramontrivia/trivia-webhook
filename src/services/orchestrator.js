@@ -1,414 +1,389 @@
-import axios from "axios";
-import { supabase } from "./supabase.js";
+import * as Companies from "./companies.js";
+import * as Messages from "./messages.js";
+import * as Commerces from "./commerces.js";
+import * as OpenAI from "./openai.js";
+import * as WhatsApp from "./whatsapp.js";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+import {
+  extractCommerceFromImage,
+  mergePendingCommerceImports,
+  saveReadyImportToCommerces,
+  resetPendingImports
+} from "./importer.js";
 
-function extractJson(raw = "") {
-  const text = String(raw || "").trim();
+const getCompany = Companies.getCompanyByPhoneNumber || Companies.default;
+const saveMessage = Messages.saveMessage || Messages.default;
+const searchCommerces = Commerces.searchCommerces || Commerces.default;
+const generateResponse = OpenAI.generateResponse || OpenAI.default;
+const sendMessage = WhatsApp.sendTextMessage || WhatsApp.default;
+const downloadMediaAsBase64 = WhatsApp.downloadMediaAsBase64;
 
-  try {
-    return JSON.parse(text);
-  } catch {}
+const ADMIN_PHONES = ["553199646223"];
 
-  const cleaned = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
+function normalize(text = "") {
+  return String(text)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {}
-
-  const match = cleaned.match(/\{[\s\S]*\}/);
-
-  if (match) {
-    return JSON.parse(match[0]);
-  }
-
-  throw new Error("Falha ao interpretar resposta da IA");
 }
 
-function arrayToText(value) {
-  if (Array.isArray(value)) {
-    return value.filter(Boolean).join(", ");
-  }
+function getPayload(payload) {
+  const value = payload?.entry?.[0]?.changes?.[0]?.value;
+  const message = value?.messages?.[0];
 
-  return value || null;
+  return {
+    phoneNumberId: value?.metadata?.phone_number_id,
+    message,
+    from: message?.from,
+    text: message?.text?.body || "",
+    isStatusOnly: !message && Array.isArray(value?.statuses)
+  };
 }
 
-function buildSearchKey(data = {}) {
+function isAdmin(from) {
+  return ADMIN_PHONES.includes(String(from));
+}
+
+function isImage(message) {
+  return message?.type === "image" || Boolean(message?.image);
+}
+
+function isAudio(message) {
+  return message?.type === "audio" || Boolean(message?.audio);
+}
+
+function isHealthQuestion(text = "") {
+  const msg = normalize(text);
+
   return [
-    data.search_key,
-    data.nome,
-    data.categoria,
-    data.tipo_google,
-    arrayToText(data.beneficios),
-    arrayToText(data.servicos),
-    arrayToText(data.especialidades),
-    arrayToText(data.exames),
-    arrayToText(data.procedimentos),
-    arrayToText(data.planos)
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+    "saude",
+    "posto",
+    "ubs",
+    "upa",
+    "hospital",
+    "pronto atendimento",
+    "medico",
+    "consulta",
+    "clinica",
+    "farmacia"
+  ].some((term) => msg.includes(term));
 }
 
-function buildEndereco(data = {}) {
-  if (Array.isArray(data.enderecos) && data.enderecos.length > 0) {
-    return data.enderecos.filter(Boolean).join(" | ");
-  }
+function buildContext(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return "";
 
-  return data.endereco || null;
+  return items
+    .slice(0, 10)
+    .map((item, index) =>
+      [
+        `${index + 1}. Nome: ${item.nome || "Não informado"}`,
+        item.telefone ? `Telefone: ${item.telefone}` : null,
+        item.endereco ? `Endereço: ${item.endereco}` : null,
+        item.horario ? `Horário: ${item.horario}` : null,
+        item.tipo_google ? `Tipo: ${item.tipo_google}` : null,
+        item.search_key ? `Busca: ${item.search_key}` : null,
+        item.sales_copy ? `Destaque: ${item.sales_copy}` : null
+      ]
+        .filter(Boolean)
+        .join(" | ")
+    )
+    .join("\n");
 }
 
-export async function resetPendingImports({ company, from }) {
-  await supabase
-    .from("commerce_imports")
-    .update({ status: "cancelled" })
-    .eq("company_id", company.company_id || company.id)
-    .eq("client_key", company.client_key)
-    .eq("admin_phone", from)
-    .in("status", ["pending", "ready"]);
+function formatImportPreview(result) {
+  const data = result?.extracted || {};
 
-  return true;
+  return [
+    "Cadastro consolidado com sucesso. Encontrei estes dados:",
+    "",
+    `Nome: ${data.nome || "Não identificado"}`,
+    `Telefone: ${data.telefone || "Não identificado"}`,
+    `Endereço: ${
+      Array.isArray(data.enderecos) && data.enderecos.length
+        ? data.enderecos.join(" | ")
+        : data.endereco || "Não identificado"
+    }`,
+    `Categoria: ${data.categoria || "Não identificada"}`,
+    `Tipo: ${data.tipo_google || "Não identificado"}`,
+    `Horário: ${data.horario || "Não identificado"}`,
+    `Instagram: ${data.instagram || "Não identificado"}`,
+    "",
+    `Benefícios: ${Array.isArray(data.beneficios) ? data.beneficios.join(", ") : "Não identificado"}`,
+    `Especialidades: ${Array.isArray(data.especialidades) ? data.especialidades.join(", ") : "Não identificado"}`,
+    `Exames/Procedimentos: ${
+      [
+        ...(Array.isArray(data.exames) ? data.exames : []),
+        ...(Array.isArray(data.procedimentos) ? data.procedimentos : [])
+      ].join(", ") || "Não identificado"
+    }`,
+    `Planos: ${Array.isArray(data.planos) ? data.planos.join(", ") : "Não identificado"}`,
+    "",
+    `Search key: ${data.search_key || "Não gerada"}`,
+    "",
+    "Responda SALVAR IMPORTACAO para gravar em commerces.",
+    "Ou CANCELAR IMPORTACAO para descartar."
+  ].join("\n");
 }
 
-export async function extractCommerceFromImage({
-  base64,
-  mime_type,
-  company,
-  from
-}) {
+async function getCompanySafe(phoneNumberId) {
+  const company = await getCompany(phoneNumberId);
+
+  if (!company) return null;
+
+  return {
+    ...company,
+    company_id: company.company_id || company.id,
+    client_key: company.client_key || String(company.id),
+    phone_number_id: company.phone_number_id || phoneNumberId
+  };
+}
+
+async function saveSafe({ company, from, role, content }) {
   try {
-    console.log("🧠 LENDO IMAGEM COM IA...");
-
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY não configurada");
-    }
-
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: OPENAI_MODEL,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: `
-Você é um extrator de dados de imagens comerciais.
-
-Leia panfletos, fachadas, cartões de visita, banners, placas e materiais de divulgação.
-
-Retorne APENAS JSON válido.
-Não use markdown.
-Não explique.
-Não invente dados.
-Se não encontrar uma informação, use null.
-
-Formato obrigatório:
-{
-  "nome": null,
-  "telefone": null,
-  "endereco": null,
-  "enderecos": [],
-  "categoria": null,
-  "search_key": null,
-  "tipo_google": null,
-  "horario": null,
-  "instagram": null,
-  "descricao": null,
-  "beneficios": [],
-  "servicos": [],
-  "especialidades": [],
-  "exames": [],
-  "procedimentos": [],
-  "planos": [],
-  "is_paid": false,
-  "priority": 0,
-  "sales_copy": null
-}
-
-Regras:
-- Extraia tudo que estiver visível.
-- "categoria" deve ser curta: saude, restaurante, beleza, comercio, servicos.
-- "search_key" deve conter palavras úteis para busca.
-- "sales_copy" deve ser curta, natural e forte, sem inventar avaliação falsa.
-`
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Extraia os dados comerciais desta imagem."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mime_type || "image/jpeg"};base64,${base64}`
-                }
-              }
-            ]
-          }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 60000
-      }
-    );
-
-    const raw = response.data?.choices?.[0]?.message?.content;
-    console.log("📦 RESPOSTA IA:", raw);
-
-    const json = extractJson(raw);
-
-    const { data, error } = await supabase
-      .from("commerce_imports")
-      .insert([
-        {
-          company_id: company.company_id || company.id,
-          client_key: company.client_key,
-          admin_phone: from,
-          extracted_data: json,
-          status: "pending"
-        }
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ ERRO AO SALVAR IMPORT:", error);
-      throw new Error("Erro ao salvar prévia");
-    }
-
-    return {
-      success: true,
-      id: data.id,
-      extracted: json
-    };
+    await saveMessage({ company, from, role, content });
   } catch (err) {
-    console.error("❌ ERRO IMPORTER:", err.message);
-
-    return {
-      success: false,
-      error: err.message
-    };
+    console.log("❌ ERRO SAVE:", err.message);
   }
 }
 
-export async function mergePendingCommerceImports({ company, from }) {
+async function sendSafe({ company, to, message }) {
   try {
-    const { data: imports, error } = await supabase
-      .from("commerce_imports")
-      .select("id, extracted_data, created_at")
-      .eq("company_id", company.company_id || company.id)
-      .eq("client_key", company.client_key)
-      .eq("admin_phone", from)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (!imports || imports.length === 0) {
-      return {
-        success: false,
-        error: "Nenhuma imagem pendente para finalizar."
-      };
-    }
-
-    const partials = imports.map((item) => item.extracted_data);
-
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: OPENAI_MODEL,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: `
-Você é um consolidador de cadastros comerciais.
-
-Você receberá vários JSONs extraídos de imagens diferentes do MESMO negócio.
-
-Sua função:
-- juntar tudo em UM cadastro final
-- remover duplicidades
-- completar listas
-- preservar telefone, endereços, planos, benefícios, especialidades, exames e procedimentos
-- não inventar dados
-- se não souber, use null ou []
-
-Retorne APENAS JSON válido.
-
-Formato obrigatório:
-{
-  "nome": null,
-  "telefone": null,
-  "endereco": null,
-  "enderecos": [],
-  "categoria": null,
-  "search_key": null,
-  "tipo_google": null,
-  "horario": null,
-  "instagram": null,
-  "descricao": null,
-  "beneficios": [],
-  "servicos": [],
-  "especialidades": [],
-  "exames": [],
-  "procedimentos": [],
-  "planos": [],
-  "is_paid": false,
-  "priority": 0,
-  "sales_copy": null
-}
-
-sales_copy:
-- frase forte e natural
-- usar ideia de "nome bastante procurado/lembrado em minha agenda"
-- não dizer "o melhor", "todo mundo gosta" ou avaliação falsa.
-`
-          },
-          {
-            role: "user",
-            content: `Una estes dados em um único cadastro final:\n${JSON.stringify(partials, null, 2)}`
-          }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 60000
-      }
-    );
-
-    const raw = response.data?.choices?.[0]?.message?.content;
-    console.log("📦 CADASTRO CONSOLIDADO IA:", raw);
-
-    const merged = extractJson(raw);
-
-    const { data: readyImport, error: insertError } = await supabase
-      .from("commerce_imports")
-      .insert([
-        {
-          company_id: company.company_id || company.id,
-          client_key: company.client_key,
-          admin_phone: from,
-          extracted_data: merged,
-          status: "ready"
-        }
-      ])
-      .select()
-      .single();
-
-    if (insertError) {
-      throw new Error(insertError.message);
-    }
-
-    await supabase
-      .from("commerce_imports")
-      .update({ status: "used" })
-      .in("id", imports.map((item) => item.id));
-
-    return {
-      success: true,
-      id: readyImport.id,
-      extracted: merged,
-      count: imports.length
-    };
+    await sendMessage({
+      company,
+      to,
+      message,
+      text: message,
+      body: message
+    });
   } catch (err) {
-    console.error("❌ ERRO MERGE IMPORTS:", err.message);
-
-    return {
-      success: false,
-      error: err.message
-    };
+    console.log("❌ ERRO SEND:", err.message);
   }
 }
 
-export async function saveReadyImportToCommerces({ company, from }) {
+async function searchSafe({ company, text }) {
   try {
-    const { data: ready, error } = await supabase
-      .from("commerce_imports")
-      .select("*")
-      .eq("company_id", company.company_id || company.id)
-      .eq("client_key", company.client_key)
-      .eq("admin_phone", from)
-      .eq("status", "ready")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (!ready) {
-      return {
-        success: false,
-        error: "Nenhum cadastro pronto para salvar."
-      };
-    }
-
-    const data = ready.extracted_data || {};
-
-    const endereco = buildEndereco(data);
-    const searchKey = buildSearchKey(data);
-
-    const { data: commerce, error: insertError } = await supabase
-      .from("commerces")
-      .insert([
-        {
-          company_id: company.company_id || company.id,
-          nome: data.nome,
-          telefone: data.telefone,
-          endereco,
-          horario: data.horario,
-          tipo_google: data.tipo_google || data.categoria,
-          search_key: searchKey,
-          category: data.categoria,
-          active: true,
-          is_paid: Boolean(data.is_paid),
-          priority: Number(data.priority || 0),
-          sales_copy: data.sales_copy
-        }
-      ])
-      .select()
-      .single();
-
-    if (insertError) {
-      throw new Error(insertError.message);
-    }
-
-    await supabase
-      .from("commerce_imports")
-      .update({ status: "saved" })
-      .eq("id", ready.id);
-
-    return {
-      success: true,
-      commerce
-    };
+    return await searchCommerces({
+      text,
+      company_id: company.company_id || company.id
+    });
   } catch (err) {
-    console.error("❌ ERRO SALVAR COMMERCE:", err.message);
-
-    return {
-      success: false,
-      error: err.message
-    };
+    console.log("❌ ERRO BUSCA COMMERCE:", err.message);
+    return [];
   }
 }
+
+async function handleAdminMessage({ company, from, text, message }) {
+  const command = normalize(text);
+
+  if (["importar comercio", "importar comércio"].includes(command)) {
+    await resetPendingImports({ company, from });
+
+    await sendSafe({
+      company,
+      to: from,
+      message:
+        "Modo lote iniciado. Envie todas as fotos do mesmo comércio. Quando terminar, responda FINALIZAR IMPORTACAO."
+    });
+
+    return true;
+  }
+
+  if (["cancelar importacao", "cancelar importação"].includes(command)) {
+    await resetPendingImports({ company, from });
+
+    await sendSafe({
+      company,
+      to: from,
+      message: "Importação cancelada. As imagens pendentes foram descartadas."
+    });
+
+    return true;
+  }
+
+  if (["finalizar importacao", "finalizar importação"].includes(command)) {
+    await sendSafe({
+      company,
+      to: from,
+      message: "Vou consolidar as imagens enviadas em um único cadastro."
+    });
+
+    const result = await mergePendingCommerceImports({ company, from });
+
+    if (!result.success) {
+      await sendSafe({
+        company,
+        to: from,
+        message: `Não consegui finalizar. Erro: ${result.error}`
+      });
+
+      return true;
+    }
+
+    await sendSafe({
+      company,
+      to: from,
+      message: formatImportPreview(result)
+    });
+
+    return true;
+  }
+
+  if (["salvar importacao", "salvar importação"].includes(command)) {
+    const result = await saveReadyImportToCommerces({ company, from });
+
+    if (!result.success) {
+      await sendSafe({
+        company,
+        to: from,
+        message: `Não consegui salvar. Erro: ${result.error}`
+      });
+
+      return true;
+    }
+
+    await sendSafe({
+      company,
+      to: from,
+      message: `Cadastro salvo com sucesso em commerces: ${result.commerce?.nome || "sem nome"}`
+    });
+
+    return true;
+  }
+
+  if (isImage(message)) {
+    const mediaId = message?.image?.id;
+
+    if (!mediaId) {
+      await sendSafe({
+        company,
+        to: from,
+        message: "Recebi a imagem, mas não encontrei o ID da mídia."
+      });
+
+      return true;
+    }
+
+    await sendSafe({
+      company,
+      to: from,
+      message: "Imagem recebida. Vou guardar esta parte para o lote."
+    });
+
+    const media = await downloadMediaAsBase64({ company, mediaId });
+
+    const result = await extractCommerceFromImage({
+      base64: media.base64,
+      mime_type: media.mime_type,
+      company,
+      from
+    });
+
+    if (!result.success) {
+      await sendSafe({
+        company,
+        to: from,
+        message: `Não consegui processar esta imagem. Erro: ${result.error}`
+      });
+
+      return true;
+    }
+
+    await sendSafe({
+      company,
+      to: from,
+      message:
+        "Imagem processada e adicionada ao lote. Envie mais fotos ou responda FINALIZAR IMPORTACAO."
+    });
+
+    return true;
+  }
+
+  return false;
+}
+
+export async function handleIncomingMessage(payload) {
+  try {
+    console.log("🔥 WEBHOOK RECEBIDO");
+
+    const { phoneNumberId, message, from, text, isStatusOnly } = getPayload(payload);
+
+    if (isStatusOnly) {
+      console.log("ℹ️ Evento de status ignorado.");
+      return;
+    }
+
+    if (!phoneNumberId || !message || !from) {
+      console.log("❌ Payload incompleto");
+      return;
+    }
+
+    const company = await getCompanySafe(phoneNumberId);
+
+    if (!company) {
+      console.log("❌ Empresa não encontrada");
+      return;
+    }
+
+    if (isAdmin(from)) {
+      const handledByAdmin = await handleAdminMessage({
+        company,
+        from,
+        text,
+        message
+      });
+
+      if (handledByAdmin) return;
+    }
+
+    if (isAudio(message)) {
+      const reply =
+        "Não consigo ouvir áudio ainda. Por favor, envie sua mensagem por escrito.";
+
+      await saveSafe({ company, from, role: "user", content: "[ÁUDIO]" });
+      await saveSafe({ company, from, role: "assistant", content: reply });
+      await sendSafe({ company, to: from, message: reply });
+
+      return;
+    }
+
+    await saveSafe({
+      company,
+      from,
+      role: "user",
+      content: text || "[SEM TEXTO]"
+    });
+
+    if (!text) {
+      const reply =
+        "Não consegui entender sua mensagem. Pode enviar novamente por escrito?";
+
+      await saveSafe({ company, from, role: "assistant", content: reply });
+      await sendSafe({ company, to: from, message: reply });
+
+      return;
+    }
+
+    const healthPriority = isHealthQuestion(text);
+
+    const commerces = await searchSafe({ company, text });
+    const context = buildContext(commerces);
+
+    let reply = await generateResponse({
+      text,
+      context,
+      company,
+      from,
+      healthPriority
+    });
+
+    if (!reply) reply = "Não consegui responder agora.";
+
+    await saveSafe({ company, from, role: "assistant", content: reply });
+    await sendSafe({ company, to: from, message: reply });
+  } catch (error) {
+    console.error("💥 ERRO GERAL:", error);
+  }
+}
+
+export default handleIncomingMessage;

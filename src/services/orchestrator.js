@@ -10,6 +10,18 @@ const searchCommerces = Commerces.searchCommerces || Commerces.default;
 const generateResponse = OpenAI.generateResponse || OpenAI.default;
 const sendMessage = WhatsApp.sendTextMessage || WhatsApp.default;
 
+const ADMIN_PHONES = [
+  "553199646223"
+];
+
+function normalize(text = "") {
+  return String(text)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 function getPayload(payload) {
   const value = payload?.entry?.[0]?.changes?.[0]?.value;
 
@@ -21,15 +33,32 @@ function getPayload(payload) {
   };
 }
 
+function isAdmin(from) {
+  return ADMIN_PHONES.includes(String(from));
+}
+
+function isAdminImportCommand(text) {
+  const msg = normalize(text);
+  return [
+    "importar comercio",
+    "importar comércio",
+    "cadastrar comercio",
+    "cadastrar comércio",
+    "novo comercio",
+    "novo comércio"
+  ].includes(msg);
+}
+
 function isAudio(message) {
   return message?.type === "audio" || Boolean(message?.audio);
 }
 
+function isImage(message) {
+  return message?.type === "image" || Boolean(message?.image);
+}
+
 function isHealthQuestion(text = "") {
-  const msg = String(text)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  const msg = normalize(text);
 
   return [
     "saude",
@@ -59,7 +88,8 @@ function buildContext(items = []) {
         item.endereco ? `Endereço: ${item.endereco}` : null,
         item.horario ? `Horário: ${item.horario}` : null,
         item.tipo_google ? `Tipo: ${item.tipo_google}` : null,
-        item.search_key ? `Busca: ${item.search_key}` : null
+        item.search_key ? `Busca: ${item.search_key}` : null,
+        item.sales_copy ? `Destaque: ${item.sales_copy}` : null
       ]
         .filter(Boolean)
         .join(" | ");
@@ -129,6 +159,36 @@ async function searchSafe({ company, text }) {
   }
 }
 
+async function handleAdminMessage({ company, from, text, message }) {
+  if (isAdminImportCommand(text)) {
+    const reply =
+      "Modo de importação iniciado. Envie a foto do panfleto, fachada, cartão de visita ou material do comércio para eu preparar o cadastro.";
+
+    await sendSafe({
+      company,
+      to: from,
+      message: reply
+    });
+
+    return true;
+  }
+
+  if (isImage(message)) {
+    const reply =
+      "Recebi a imagem. O próximo passo é ligar o serviço de leitura da imagem para extrair nome, telefone, endereço, categoria e preparar o cadastro antes de salvar no Supabase.";
+
+    await sendSafe({
+      company,
+      to: from,
+      message: reply
+    });
+
+    return true;
+  }
+
+  return false;
+}
+
 export async function handleIncomingMessage(payload) {
   try {
     console.log("🔥 WEBHOOK RECEBIDO");
@@ -152,6 +212,19 @@ export async function handleIncomingMessage(payload) {
     if (!company) {
       console.log("❌ Empresa não encontrada");
       return;
+    }
+
+    if (isAdmin(from)) {
+      const handledByAdmin = await handleAdminMessage({
+        company,
+        from,
+        text,
+        message
+      });
+
+      if (handledByAdmin) {
+        return;
+      }
     }
 
     if (isAudio(message)) {

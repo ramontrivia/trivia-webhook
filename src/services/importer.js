@@ -31,8 +31,16 @@ function extractJson(raw = "") {
 
 function normalizeArray(value) {
   if (!Array.isArray(value)) return [];
+
   return value
-    .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
+    .map((v) => {
+      if (!v) return null;
+      if (typeof v === "string") return v;
+      if (typeof v === "object") {
+        return Object.values(v).filter(Boolean).join(" ");
+      }
+      return String(v);
+    })
     .filter(Boolean);
 }
 
@@ -42,6 +50,7 @@ function buildSearchKey(data = {}) {
     data.nome,
     data.categoria,
     data.tipo_google,
+    data.descricao,
     ...normalizeArray(data.beneficios),
     ...normalizeArray(data.servicos),
     ...normalizeArray(data.especialidades),
@@ -59,7 +68,20 @@ function buildEndereco(data = {}) {
   if (Array.isArray(data.enderecos) && data.enderecos.length > 0) {
     return data.enderecos.filter(Boolean).join(" | ");
   }
+
   return data.endereco || null;
+}
+
+export async function resetPendingImports({ company, from }) {
+  await supabase
+    .from("commerce_imports")
+    .update({ status: "cancelled" })
+    .eq("company_id", company.company_id || company.id)
+    .eq("client_key", company.client_key)
+    .eq("admin_phone", from)
+    .in("status", ["pending", "ready"]);
+
+  return true;
 }
 
 export async function extractCommerceFromImage({
@@ -69,7 +91,9 @@ export async function extractCommerceFromImage({
   from
 }) {
   try {
-    console.log("🧠 LENDO IMAGEM COM IA...");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY não configurada");
+    }
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -81,18 +105,31 @@ export async function extractCommerceFromImage({
           {
             role: "system",
             content: `
-Você é um extrator inteligente de dados comerciais.
+Você é um extrator inteligente de cadastros locais.
 
-Leia qualquer tipo de imagem:
+Leia qualquer imagem:
 - panfleto
 - fachada
-- cartão
+- cartão de visita
 - anúncio
-- conversa com informações
+- tabela de horários
+- igreja
+- loja
+- profissional autônomo
+- clínica
+- salão
+- pet shop
+- restaurante
+- serviço de construção
+- qualquer negócio local
 
 Retorne APENAS JSON válido.
+Não use markdown.
+Não explique.
+Não invente telefone, endereço, horário ou nome.
+Se não encontrar algo, use null ou [].
 
-Formato:
+Formato obrigatório:
 {
   "nome": null,
   "telefone": null,
@@ -115,39 +152,30 @@ Formato:
   "sales_copy": null
 }
 
-REGRAS:
-
+REGRAS IMPORTANTES:
 1. Categoria simples:
-saude, beleza, restaurante, servicos, comercio, igreja, educacao
+saude, beleza, restaurante, servicos, comercio, igreja, educacao, pet, construcao, moda, oficina, evento.
 
-2. search_key (CRÍTICO):
-Gere palavras que representam:
-- o que é
-- o que vende
-- como procuram
-- problemas que resolve
+2. search_key é CRÍTICO:
+Gere termos populares, sinônimos e formas como o povo procuraria.
 
 Exemplos:
-pedreiro → pedreiro obra reforma construção parede reboco piso telhado vazamento
-salão → salão cabelo corte escova unha manicure estética beleza
-pet → pet cachorro gato banho tosa ração veterinário
-igreja → igreja culto oração bíblia fé religioso
+pedreiro → pedreiro obra reforma construcao parede reboco piso telhado vazamento alvenaria
+salão → salao cabelo corte escova unha manicure estetica beleza sobrancelha
+pet shop → pet cachorro gato banho tosa racao veterinario animal
+igreja → igreja culto oracao estudo biblico fe religioso domingo
+moda fitness → roupa fitness moda fitness fitwear academia treino legging top roupa de academia
 
-Use linguagem popular.
+3. horario:
+Sempre retorne texto legível.
+Nunca retorne objeto.
+Exemplo:
+"terça 19:30 | quinta oração 19:00 e estudo bíblico 19:30 | domingo 19:00 às 20:30"
 
-3. NÃO inventar dados.
-
-4. Se não tiver, usar null.
-
-5. horario:
-SEMPRE retornar texto legível.
-Ex:
-"terça 19:30 | quinta oração 19:00 | domingo 19:00"
-NUNCA retornar objeto.
-
-6. sales_copy:
-Frase forte e natural:
-"Um nome bastante lembrado por quem busca este tipo de serviço."
+4. sales_copy:
+Frase curta, forte e natural, sem avaliação falsa.
+Exemplo:
+"Um nome bastante lembrado por quem busca esse tipo de serviço por estas bandas."
 `
           },
           {
@@ -155,12 +183,12 @@ Frase forte e natural:
             content: [
               {
                 type: "text",
-                text: "Extraia todos os dados desta imagem."
+                text: "Extraia todos os dados úteis desta imagem para cadastro local."
               },
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:${mime_type};base64,${base64}`
+                  url: `data:${mime_type || "image/jpeg"};base64,${base64}`
                 }
               }
             ]
@@ -183,7 +211,7 @@ Frase forte e natural:
       .from("commerce_imports")
       .insert([
         {
-          company_id: company.company_id,
+          company_id: company.company_id || company.id,
           client_key: company.client_key,
           admin_phone: from,
           extracted_data: json,
@@ -208,12 +236,23 @@ Frase forte e natural:
 
 export async function mergePendingCommerceImports({ company, from }) {
   try {
-    const { data: imports } = await supabase
+    const { data: imports, error } = await supabase
       .from("commerce_imports")
-      .select("*")
-      .eq("company_id", company.company_id)
+      .select("id, extracted_data, created_at")
+      .eq("company_id", company.company_id || company.id)
+      .eq("client_key", company.client_key)
       .eq("admin_phone", from)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    if (!imports || imports.length === 0) {
+      return {
+        success: false,
+        error: "Nenhuma imagem pendente para finalizar."
+      };
+    }
 
     const partials = imports.map((i) => i.extracted_data);
 
@@ -227,21 +266,49 @@ export async function mergePendingCommerceImports({ company, from }) {
           {
             role: "system",
             content: `
-Una vários JSONs do MESMO negócio.
+Você é um consolidador de cadastros locais.
 
-- remover duplicados
-- unir listas
-- completar dados
+Você receberá vários JSONs extraídos de imagens diferentes do MESMO cadastro.
 
-horario → texto legível
-listas → arrays de strings
+Una tudo em um único cadastro final.
+Remova duplicidades.
+Preserve todos os dados úteis.
+Não invente dados.
+Retorne APENAS JSON válido.
 
-retorne JSON válido
+Formato obrigatório:
+{
+  "nome": null,
+  "telefone": null,
+  "endereco": null,
+  "enderecos": [],
+  "categoria": null,
+  "search_key": null,
+  "tipo_google": null,
+  "horario": null,
+  "instagram": null,
+  "descricao": null,
+  "beneficios": [],
+  "servicos": [],
+  "especialidades": [],
+  "exames": [],
+  "procedimentos": [],
+  "planos": [],
+  "is_paid": false,
+  "priority": 0,
+  "sales_copy": null
+}
+
+Regras:
+- horario deve ser texto, nunca objeto.
+- listas devem ser arrays de strings.
+- search_key deve ser rico, com sinônimos e termos populares.
+- sales_copy deve ser natural, curta e comercial, sem mentir.
 `
           },
           {
             role: "user",
-            content: JSON.stringify(partials)
+            content: `Una estes dados em um único cadastro final:\n${JSON.stringify(partials, null, 2)}`
           }
         ]
       },
@@ -249,19 +316,18 @@ retorne JSON válido
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 60000
       }
     );
 
-    const merged = extractJson(
-      response.data?.choices?.[0]?.message?.content
-    );
+    const merged = extractJson(response.data?.choices?.[0]?.message?.content);
 
-    const { data } = await supabase
+    const { data: readyImport, error: insertError } = await supabase
       .from("commerce_imports")
       .insert([
         {
-          company_id: company.company_id,
+          company_id: company.company_id || company.id,
           client_key: company.client_key,
           admin_phone: from,
           extracted_data: merged,
@@ -271,51 +337,71 @@ retorne JSON válido
       .select()
       .single();
 
+    if (insertError) throw new Error(insertError.message);
+
     await supabase
       .from("commerce_imports")
       .update({ status: "used" })
       .in("id", imports.map((i) => i.id));
 
-    return { success: true, extracted: merged };
+    return {
+      success: true,
+      id: readyImport.id,
+      extracted: merged,
+      count: imports.length
+    };
   } catch (err) {
     console.error("❌ ERRO MERGE:", err.message);
-    return { success: false };
+    return { success: false, error: err.message };
   }
 }
 
 export async function saveReadyImportToCommerces({ company, from }) {
   try {
-    const { data: ready } = await supabase
+    const { data: ready, error } = await supabase
       .from("commerce_imports")
       .select("*")
-      .eq("company_id", company.company_id)
+      .eq("company_id", company.company_id || company.id)
+      .eq("client_key", company.client_key)
       .eq("admin_phone", from)
       .eq("status", "ready")
+      .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    const d = ready.extracted_data;
+    if (error) throw new Error(error.message);
 
-    const { data: commerce } = await supabase
+    if (!ready) {
+      return {
+        success: false,
+        error: "Nenhum cadastro pronto para salvar."
+      };
+    }
+
+    const d = ready.extracted_data || {};
+
+    const { data: commerce, error: insertError } = await supabase
       .from("commerces")
       .insert([
         {
-          company_id: company.company_id,
+          company_id: company.company_id || company.id,
           nome: d.nome,
           telefone: d.telefone,
           endereco: buildEndereco(d),
           horario: d.horario,
-          tipo_google: d.tipo_google,
+          tipo_google: d.tipo_google || d.categoria,
           search_key: buildSearchKey(d),
           category: d.categoria,
           active: true,
-          is_paid: d.is_paid || false,
-          priority: d.priority || 0,
+          is_paid: Boolean(d.is_paid),
+          priority: Number(d.priority || 0),
           sales_copy: d.sales_copy
         }
       ])
       .select()
       .single();
+
+    if (insertError) throw new Error(insertError.message);
 
     await supabase
       .from("commerce_imports")
@@ -324,7 +410,7 @@ export async function saveReadyImportToCommerces({ company, from }) {
 
     return { success: true, commerce };
   } catch (err) {
-    console.error("❌ ERRO SAVE:", err.message);
-    return { success: false };
+    console.error("❌ ERRO SAVE IMPORT:", err.message);
+    return { success: false, error: err.message };
   }
 }

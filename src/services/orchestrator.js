@@ -441,9 +441,19 @@ export async function handleIncomingMessage(payload) {
       return;
     }
 
-    const healthPriority = isHealthQuestion(text);
-
     const commerces = await searchSafe({ company, text });
+
+    if (!commerces || commerces.length === 0) {
+      const reply =
+        "Pois veja, boa alma… procurei em minha agenda, mas ainda não tenho registro firme sobre isso por estas bandas. Não hei de lhe passar indicação de orelhada, para não inventar notícia.";
+
+      await saveSafe({ company, from, role: "assistant", content: reply });
+      await sendSafe({ company, to: from, message: reply });
+
+      return;
+    }
+
+    const healthPriority = isHealthQuestion(text);
     const context = buildContext(commerces);
 
     let reply = await generateResponse({

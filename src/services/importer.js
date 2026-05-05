@@ -11,10 +11,7 @@ function extractJson(raw = "") {
     return JSON.parse(text);
   } catch {}
 
-  const cleaned = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
+  const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
 
   try {
     return JSON.parse(cleaned);
@@ -22,9 +19,7 @@ function extractJson(raw = "") {
 
   const match = cleaned.match(/\{[\s\S]*\}/);
 
-  if (match) {
-    return JSON.parse(match[0]);
-  }
+  if (match) return JSON.parse(match[0]);
 
   throw new Error("Falha ao interpretar resposta da IA");
 }
@@ -36,9 +31,7 @@ function normalizeArray(value) {
     .map((v) => {
       if (!v) return null;
       if (typeof v === "string") return v;
-      if (typeof v === "object") {
-        return Object.values(v).filter(Boolean).join(" ");
-      }
+      if (typeof v === "object") return Object.values(v).filter(Boolean).join(" ");
       return String(v);
     })
     .filter(Boolean);
@@ -84,16 +77,9 @@ export async function resetPendingImports({ company, from }) {
   return true;
 }
 
-export async function extractCommerceFromImage({
-  base64,
-  mime_type,
-  company,
-  from
-}) {
+export async function extractCommerceFromImage({ base64, mime_type, company, from }) {
   try {
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY não configurada");
-    }
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY não configurada");
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -105,28 +91,14 @@ export async function extractCommerceFromImage({
           {
             role: "system",
             content: `
-Você é um extrator inteligente de cadastros locais.
+Você é um extrator de cadastros locais.
 
-Leia qualquer imagem:
-- panfleto
-- fachada
-- cartão de visita
-- anúncio
-- tabela de horários
-- igreja
-- loja
-- profissional autônomo
-- clínica
-- salão
-- pet shop
-- restaurante
-- serviço de construção
-- qualquer negócio local
+Leia a imagem e extraia somente informações visíveis ou claramente presentes.
 
 Retorne APENAS JSON válido.
 Não use markdown.
 Não explique.
-Não invente telefone, endereço, horário ou nome.
+Não invente telefone, endereço, horário, nome, serviço ou categoria.
 Se não encontrar algo, use null ou [].
 
 Formato obrigatório:
@@ -152,30 +124,17 @@ Formato obrigatório:
   "sales_copy": null
 }
 
-REGRAS IMPORTANTES:
-1. Categoria simples:
-saude, beleza, restaurante, servicos, comercio, igreja, educacao, pet, construcao, moda, oficina, evento.
-
-2. search_key é CRÍTICO:
-Gere termos populares, sinônimos e formas como o povo procuraria.
-
-Exemplos:
-pedreiro → pedreiro obra reforma construcao parede reboco piso telhado vazamento alvenaria
-salão → salao cabelo corte escova unha manicure estetica beleza sobrancelha
-pet shop → pet cachorro gato banho tosa racao veterinario animal
-igreja → igreja culto oracao estudo biblico fe religioso domingo
-moda fitness → roupa fitness moda fitness fitwear academia treino legging top roupa de academia
-
-3. horario:
-Sempre retorne texto legível.
-Nunca retorne objeto.
-Exemplo:
-"terça 19:30 | quinta oração 19:00 e estudo bíblico 19:30 | domingo 19:00 às 20:30"
-
-4. sales_copy:
-Frase curta, forte e natural, sem avaliação falsa.
-Exemplo:
-"Um nome bastante lembrado por quem busca esse tipo de serviço por estas bandas."
+REGRAS:
+1. Não criar sinônimos amplos.
+2. Não tentar adivinhar intenção futura do usuário.
+3. search_key deve conter apenas:
+- nome do negócio
+- categoria evidente
+- palavras realmente visíveis na imagem
+- serviços, produtos, especialidades, benefícios, horários e planos visíveis
+4. horario deve ser texto legível, nunca objeto.
+5. listas devem ser arrays de strings.
+6. sales_copy deve ser curta e neutra, sem elogio falso.
 `
           },
           {
@@ -183,7 +142,7 @@ Exemplo:
             content: [
               {
                 type: "text",
-                text: "Extraia todos os dados úteis desta imagem para cadastro local."
+                text: "Extraia os dados úteis desta imagem para cadastro local."
               },
               {
                 type: "image_url",
@@ -204,8 +163,7 @@ Exemplo:
       }
     );
 
-    const raw = response.data?.choices?.[0]?.message?.content;
-    const json = extractJson(raw);
+    const json = extractJson(response.data?.choices?.[0]?.message?.content);
 
     const { data, error } = await supabase
       .from("commerce_imports")
@@ -223,11 +181,7 @@ Exemplo:
 
     if (error) throw new Error(error.message);
 
-    return {
-      success: true,
-      id: data.id,
-      extracted: json
-    };
+    return { success: true, id: data.id, extracted: json };
   } catch (err) {
     console.error("❌ ERRO IMPORT:", err.message);
     return { success: false, error: err.message };
@@ -248,10 +202,7 @@ export async function mergePendingCommerceImports({ company, from }) {
     if (error) throw new Error(error.message);
 
     if (!imports || imports.length === 0) {
-      return {
-        success: false,
-        error: "Nenhuma imagem pendente para finalizar."
-      };
+      return { success: false, error: "Nenhuma imagem pendente para finalizar." };
     }
 
     const partials = imports.map((i) => i.extracted_data);
@@ -268,12 +219,11 @@ export async function mergePendingCommerceImports({ company, from }) {
             content: `
 Você é um consolidador de cadastros locais.
 
-Você receberá vários JSONs extraídos de imagens diferentes do MESMO cadastro.
-
-Una tudo em um único cadastro final.
+Una vários JSONs do MESMO cadastro.
 Remova duplicidades.
 Preserve todos os dados úteis.
 Não invente dados.
+Não crie sinônimos amplos.
 Retorne APENAS JSON válido.
 
 Formato obrigatório:
@@ -302,8 +252,8 @@ Formato obrigatório:
 Regras:
 - horario deve ser texto, nunca objeto.
 - listas devem ser arrays de strings.
-- search_key deve ser rico, com sinônimos e termos populares.
-- sales_copy deve ser natural, curta e comercial, sem mentir.
+- search_key deve conter somente termos visíveis ou presentes nos dados consolidados.
+- sales_copy deve ser natural, curta e sem elogio falso.
 `
           },
           {
@@ -372,10 +322,7 @@ export async function saveReadyImportToCommerces({ company, from }) {
     if (error) throw new Error(error.message);
 
     if (!ready) {
-      return {
-        success: false,
-        error: "Nenhum cadastro pronto para salvar."
-      };
+      return { success: false, error: "Nenhum cadastro pronto para salvar." };
     }
 
     const d = ready.extracted_data || {};

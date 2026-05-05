@@ -19,6 +19,7 @@ const sendMessage = WhatsApp.sendTextMessage || WhatsApp.default;
 const downloadMediaAsBase64 = WhatsApp.downloadMediaAsBase64;
 
 const ADMIN_PHONES = ["553199646223"];
+const importSessions = new Map();
 
 function normalize(text = "") {
   return String(text)
@@ -26,6 +27,22 @@ function normalize(text = "") {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+function getImportKey(company, from) {
+  return `${company.company_id || company.id}:${from}`;
+}
+
+function startImportSession(company, from) {
+  importSessions.set(getImportKey(company, from), true);
+}
+
+function endImportSession(company, from) {
+  importSessions.delete(getImportKey(company, from));
+}
+
+function hasImportSession(company, from) {
+  return importSessions.has(getImportKey(company, from));
 }
 
 function getPayload(payload) {
@@ -91,35 +108,58 @@ function buildContext(items = []) {
     .join("\n");
 }
 
+function formatValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "Não identificado";
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "Não identificado";
+
+    return value
+      .map((item) => {
+        if (typeof item === "object" && item !== null) {
+          return Object.entries(item)
+            .map(([key, val]) => `${key}: ${val}`)
+            .join(" / ");
+        }
+
+        return String(item);
+      })
+      .join(", ");
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, val]) => `${key}: ${val}`)
+      .join(" / ");
+  }
+
+  return String(value);
+}
+
 function formatImportPreview(result) {
   const data = result?.extracted || {};
 
   return [
     "Cadastro consolidado com sucesso. Encontrei estes dados:",
     "",
-    `Nome: ${data.nome || "Não identificado"}`,
-    `Telefone: ${data.telefone || "Não identificado"}`,
-    `Endereço: ${
-      Array.isArray(data.enderecos) && data.enderecos.length
-        ? data.enderecos.join(" | ")
-        : data.endereco || "Não identificado"
-    }`,
-    `Categoria: ${data.categoria || "Não identificada"}`,
-    `Tipo: ${data.tipo_google || "Não identificado"}`,
-    `Horário: ${data.horario || "Não identificado"}`,
-    `Instagram: ${data.instagram || "Não identificado"}`,
+    `Nome: ${formatValue(data.nome)}`,
+    `Telefone: ${formatValue(data.telefone)}`,
+    `Endereço: ${formatValue(data.enderecos?.length ? data.enderecos : data.endereco)}`,
+    `Categoria: ${formatValue(data.categoria)}`,
+    `Tipo: ${formatValue(data.tipo_google)}`,
+    `Horário: ${formatValue(data.horario)}`,
+    `Instagram: ${formatValue(data.instagram)}`,
     "",
-    `Benefícios: ${Array.isArray(data.beneficios) ? data.beneficios.join(", ") : "Não identificado"}`,
-    `Especialidades: ${Array.isArray(data.especialidades) ? data.especialidades.join(", ") : "Não identificado"}`,
-    `Exames/Procedimentos: ${
-      [
-        ...(Array.isArray(data.exames) ? data.exames : []),
-        ...(Array.isArray(data.procedimentos) ? data.procedimentos : [])
-      ].join(", ") || "Não identificado"
-    }`,
-    `Planos: ${Array.isArray(data.planos) ? data.planos.join(", ") : "Não identificado"}`,
+    `Benefícios: ${formatValue(data.beneficios)}`,
+    `Serviços: ${formatValue(data.servicos)}`,
+    `Especialidades: ${formatValue(data.especialidades)}`,
+    `Exames: ${formatValue(data.exames)}`,
+    `Procedimentos: ${formatValue(data.procedimentos)}`,
+    `Planos: ${formatValue(data.planos)}`,
     "",
-    `Search key: ${data.search_key || "Não gerada"}`,
+    `Search key: ${formatValue(data.search_key)}`,
     "",
     "Responda SALVAR IMPORTACAO para gravar em commerces.",
     "Ou CANCELAR IMPORTACAO para descartar."
@@ -178,12 +218,13 @@ async function handleAdminMessage({ company, from, text, message }) {
 
   if (["importar comercio", "importar comércio"].includes(command)) {
     await resetPendingImports({ company, from });
+    startImportSession(company, from);
 
     await sendSafe({
       company,
       to: from,
       message:
-        "Modo lote iniciado. Envie todas as fotos do mesmo comércio. Quando terminar, responda FINALIZAR IMPORTACAO."
+        "Modo lote iniciado. Envie todas as fotos do mesmo cadastro. Quando terminar, responda FINALIZAR IMPORTACAO."
     });
 
     return true;
@@ -191,6 +232,7 @@ async function handleAdminMessage({ company, from, text, message }) {
 
   if (["cancelar importacao", "cancelar importação"].includes(command)) {
     await resetPendingImports({ company, from });
+    endImportSession(company, from);
 
     await sendSafe({
       company,
@@ -202,6 +244,17 @@ async function handleAdminMessage({ company, from, text, message }) {
   }
 
   if (["finalizar importacao", "finalizar importação"].includes(command)) {
+    if (!hasImportSession(company, from)) {
+      await sendSafe({
+        company,
+        to: from,
+        message:
+          "Não há importação em andamento. Para começar, envie IMPORTAR COMERCIO."
+      });
+
+      return true;
+    }
+
     await sendSafe({
       company,
       to: from,
@@ -242,6 +295,8 @@ async function handleAdminMessage({ company, from, text, message }) {
       return true;
     }
 
+    endImportSession(company, from);
+
     await sendSafe({
       company,
       to: from,
@@ -252,6 +307,17 @@ async function handleAdminMessage({ company, from, text, message }) {
   }
 
   if (isImage(message)) {
+    if (!hasImportSession(company, from)) {
+      await sendSafe({
+        company,
+        to: from,
+        message:
+          "Recebi uma imagem, mas não consigo analisar imagens no atendimento comum. Escreva em texto o que deseja ou, se for cadastro administrativo, envie antes IMPORTAR COMERCIO."
+      });
+
+      return true;
+    }
+
     const mediaId = message?.image?.id;
 
     if (!mediaId) {
@@ -334,6 +400,17 @@ export async function handleIncomingMessage(payload) {
       });
 
       if (handledByAdmin) return;
+    }
+
+    if (isImage(message)) {
+      const reply =
+        "Recebi uma imagem, mas ainda não consigo analisar imagens no atendimento comum. Escreva em texto o que precisa, por gentileza.";
+
+      await saveSafe({ company, from, role: "user", content: "[IMAGEM]" });
+      await saveSafe({ company, from, role: "assistant", content: reply });
+      await sendSafe({ company, to: from, message: reply });
+
+      return;
     }
 
     if (isAudio(message)) {

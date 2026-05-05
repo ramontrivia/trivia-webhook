@@ -10,37 +10,6 @@ function cleanSearchText(text) {
     .trim();
 }
 
-function isHealthIntent(text) {
-  const search = cleanSearchText(text);
-
-  const terms = [
-    "saude",
-    "posto",
-    "ubs",
-    "upa",
-    "hospital",
-    "pronto atendimento",
-    "pronto",
-    "atendimento",
-    "medico",
-    "medica",
-    "consulta",
-    "clinica",
-    "dentista",
-    "psicologo",
-    "psicologa",
-    "saude mental",
-    "secretaria saude",
-    "vacina",
-    "exame",
-    "laboratorio",
-    "farmacia",
-    "remedio"
-  ];
-
-  return terms.some((term) => search.includes(term));
-}
-
 function scoreCommerce(item, originalText) {
   const text = cleanSearchText(
     [
@@ -51,7 +20,8 @@ function scoreCommerce(item, originalText) {
       item.tipo_google,
       item.busca_origem,
       item.search_key,
-      item.category
+      item.category,
+      item.sales_copy
     ].join(" ")
   );
 
@@ -64,27 +34,11 @@ function scoreCommerce(item, originalText) {
     .filter((word) => word.length >= 3);
 
   for (const word of words) {
-    if (text.includes(word)) score += 3;
+    if (text.includes(word)) score += 10;
   }
 
-  const publicHealthPriority = [
-    "secretaria",
-    "hospital",
-    "santa terezinha",
-    "ubs",
-    "posto",
-    "saude",
-    "unidade",
-    "centro de saude",
-    "saude mental",
-    "atencao a mulher"
-  ];
-
-  if (isHealthIntent(originalText)) {
-    for (const term of publicHealthPriority) {
-      if (text.includes(term)) score += 5;
-    }
-  }
+  if (item.is_paid) score += 50;
+  if (item.priority) score += Number(item.priority) || 0;
 
   return score;
 }
@@ -100,36 +54,19 @@ export async function searchCommerces({ text, company_id }) {
       return [];
     }
 
-    console.log("BUSCANDO COMERCIOS:", search, "EMPRESA:", company_id);
-
-    let words = search
+    const words = search
       .split(" ")
       .filter((word) => word.length >= 3)
-      .slice(0, 6);
-
-    if (isHealthIntent(search)) {
-      words = [
-        ...words,
-        "saude",
-        "hospital",
-        "posto",
-        "ubs",
-        "secretaria",
-        "clinica",
-        "medico",
-        "pronto",
-        "atendimento"
-      ];
-    }
-
-    words = [...new Set(words)].slice(0, 12);
+      .slice(0, 10);
 
     if (words.length === 0) return [];
+
+    console.log("BUSCANDO COMERCIOS:", search, "TERMOS:", words, "EMPRESA:", company_id);
 
     const filters = words
       .map(
         (word) =>
-          `nome.ilike.%${word}%,search_key.ilike.%${word}%,tipo_google.ilike.%${word}%,busca_origem.ilike.%${word}%,endereco.ilike.%${word}%,category.ilike.%${word}%`
+          `nome.ilike.%${word}%,search_key.ilike.%${word}%,tipo_google.ilike.%${word}%,busca_origem.ilike.%${word}%,endereco.ilike.%${word}%,category.ilike.%${word}%,sales_copy.ilike.%${word}%`
       )
       .join(",");
 

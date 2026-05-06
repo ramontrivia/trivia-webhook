@@ -19,7 +19,6 @@ const sendMessage = WhatsApp.sendTextMessage || WhatsApp.default;
 const downloadMediaAsBase64 = WhatsApp.downloadMediaAsBase64;
 
 const ADMIN_PHONES = ["553199646223"];
-const importSessions = new Map();
 
 function normalize(text = "") {
   return String(text)
@@ -27,22 +26,6 @@ function normalize(text = "") {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
-}
-
-function getImportKey(company, from) {
-  return `${company.company_id || company.id}:${from}`;
-}
-
-function startImportSession(company, from) {
-  importSessions.set(getImportKey(company, from), true);
-}
-
-function endImportSession(company, from) {
-  importSessions.delete(getImportKey(company, from));
-}
-
-function hasImportSession(company, from) {
-  return importSessions.has(getImportKey(company, from));
 }
 
 function getPayload(payload) {
@@ -70,34 +53,42 @@ function isAudio(message) {
   return message?.type === "audio" || Boolean(message?.audio);
 }
 
-function formatValue(value) {
-  if (value === null || value === undefined || value === "") {
-    return "Não identificado";
-  }
+function isHealthQuestion(text = "") {
+  const msg = normalize(text);
 
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "Não identificado";
+  return [
+    "saude",
+    "posto",
+    "ubs",
+    "upa",
+    "hospital",
+    "pronto atendimento",
+    "medico",
+    "consulta",
+    "clinica",
+    "farmacia"
+  ].some((term) => msg.includes(term));
+}
 
-    return value
-      .map((item) => {
-        if (typeof item === "object" && item !== null) {
-          return Object.entries(item)
-            .map(([key, val]) => `${key}: ${val}`)
-            .join(" / ");
-        }
+function buildContext(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return "";
 
-        return String(item);
-      })
-      .join(", ");
-  }
-
-  if (typeof value === "object") {
-    return Object.entries(value)
-      .map(([key, val]) => `${key}: ${val}`)
-      .join(" / ");
-  }
-
-  return String(value);
+  return items
+    .slice(0, 10)
+    .map((item, index) =>
+      [
+        `${index + 1}. Nome: ${item.nome || "Não informado"}`,
+        item.telefone ? `Telefone: ${item.telefone}` : null,
+        item.endereco ? `Endereço: ${item.endereco}` : null,
+        item.horario ? `Horário: ${item.horario}` : null,
+        item.tipo_google ? `Tipo: ${item.tipo_google}` : null,
+        item.search_key ? `Busca: ${item.search_key}` : null,
+        item.sales_copy ? `Destaque: ${item.sales_copy}` : null
+      ]
+        .filter(Boolean)
+        .join(" | ")
+    )
+    .join("\n");
 }
 
 function formatImportPreview(result) {
@@ -106,47 +97,32 @@ function formatImportPreview(result) {
   return [
     "Cadastro consolidado com sucesso. Encontrei estes dados:",
     "",
-    `Nome: ${formatValue(data.nome)}`,
-    `Telefone: ${formatValue(data.telefone)}`,
-    `Endereço: ${formatValue(data.enderecos?.length ? data.enderecos : data.endereco)}`,
-    `Categoria: ${formatValue(data.categoria)}`,
-    `Tipo: ${formatValue(data.tipo_google)}`,
-    `Horário: ${formatValue(data.horario)}`,
-    `Instagram: ${formatValue(data.instagram)}`,
+    `Nome: ${data.nome || "Não identificado"}`,
+    `Telefone: ${data.telefone || "Não identificado"}`,
+    `Endereço: ${
+      Array.isArray(data.enderecos) && data.enderecos.length
+        ? data.enderecos.join(" | ")
+        : data.endereco || "Não identificado"
+    }`,
+    `Categoria: ${data.categoria || "Não identificada"}`,
+    `Tipo: ${data.tipo_google || "Não identificado"}`,
+    `Horário: ${data.horario || "Não identificado"}`,
+    `Instagram: ${data.instagram || "Não identificado"}`,
     "",
-    `Benefícios: ${formatValue(data.beneficios)}`,
-    `Serviços: ${formatValue(data.servicos)}`,
-    `Especialidades: ${formatValue(data.especialidades)}`,
-    `Exames: ${formatValue(data.exames)}`,
-    `Procedimentos: ${formatValue(data.procedimentos)}`,
-    `Planos: ${formatValue(data.planos)}`,
+    `Benefícios: ${Array.isArray(data.beneficios) ? data.beneficios.join(", ") : "Não identificado"}`,
+    `Especialidades: ${Array.isArray(data.especialidades) ? data.especialidades.join(", ") : "Não identificado"}`,
+    `Exames/Procedimentos: ${
+      [
+        ...(Array.isArray(data.exames) ? data.exames : []),
+        ...(Array.isArray(data.procedimentos) ? data.procedimentos : [])
+      ].join(", ") || "Não identificado"
+    }`,
+    `Planos: ${Array.isArray(data.planos) ? data.planos.join(", ") : "Não identificado"}`,
     "",
-    `Search key: ${formatValue(data.search_key)}`,
+    `Search key: ${data.search_key || "Não gerada"}`,
     "",
     "Responda SALVAR IMPORTACAO para gravar em commerces.",
     "Ou CANCELAR IMPORTACAO para descartar."
-  ].join("\n");
-}
-
-function formatCommerceReply(items = []) {
-  const list = items.slice(0, 5).map((item, index) => {
-    const parts = [
-      `${index + 1}. ${item.nome || "Nome não informado"}`,
-      item.sales_copy ? item.sales_copy : null,
-      item.telefone ? `Telefone: ${item.telefone}` : "Telefone: não registrado",
-      item.endereco ? `Endereço: ${item.endereco}` : null,
-      item.horario ? `Horário: ${item.horario}` : null
-    ].filter(Boolean);
-
-    return parts.join("\n");
-  });
-
-  return [
-    "Pois veja, boa alma… encontrei estes registros em minha agenda por estas bandas:",
-    "",
-    list.join("\n\n"),
-    "",
-    "Se vosmecê desejar, posso seguir procurando outros nomes por estas mesmas paragens."
   ].join("\n");
 }
 
@@ -202,13 +178,12 @@ async function handleAdminMessage({ company, from, text, message }) {
 
   if (["importar comercio", "importar comércio"].includes(command)) {
     await resetPendingImports({ company, from });
-    startImportSession(company, from);
 
     await sendSafe({
       company,
       to: from,
       message:
-        "Modo lote iniciado. Envie todas as fotos do mesmo cadastro. Quando terminar, responda FINALIZAR IMPORTACAO."
+        "Modo lote iniciado. Envie todas as fotos do mesmo comércio. Quando terminar, responda FINALIZAR IMPORTACAO."
     });
 
     return true;
@@ -216,7 +191,6 @@ async function handleAdminMessage({ company, from, text, message }) {
 
   if (["cancelar importacao", "cancelar importação"].includes(command)) {
     await resetPendingImports({ company, from });
-    endImportSession(company, from);
 
     await sendSafe({
       company,
@@ -228,17 +202,6 @@ async function handleAdminMessage({ company, from, text, message }) {
   }
 
   if (["finalizar importacao", "finalizar importação"].includes(command)) {
-    if (!hasImportSession(company, from)) {
-      await sendSafe({
-        company,
-        to: from,
-        message:
-          "Não há importação em andamento. Para começar, envie IMPORTAR COMERCIO."
-      });
-
-      return true;
-    }
-
     await sendSafe({
       company,
       to: from,
@@ -279,8 +242,6 @@ async function handleAdminMessage({ company, from, text, message }) {
       return true;
     }
 
-    endImportSession(company, from);
-
     await sendSafe({
       company,
       to: from,
@@ -291,17 +252,6 @@ async function handleAdminMessage({ company, from, text, message }) {
   }
 
   if (isImage(message)) {
-    if (!hasImportSession(company, from)) {
-      await sendSafe({
-        company,
-        to: from,
-        message:
-          "Recebi uma imagem, mas não consigo analisar imagens no atendimento comum. Escreva em texto o que deseja ou, se for cadastro administrativo, envie antes IMPORTAR COMERCIO."
-      });
-
-      return true;
-    }
-
     const mediaId = message?.image?.id;
 
     if (!mediaId) {
@@ -386,17 +336,6 @@ export async function handleIncomingMessage(payload) {
       if (handledByAdmin) return;
     }
 
-    if (isImage(message)) {
-      const reply =
-        "Recebi uma imagem, mas ainda não consigo analisar imagens no atendimento comum. Escreva em texto o que precisa, por gentileza.";
-
-      await saveSafe({ company, from, role: "user", content: "[IMAGEM]" });
-      await saveSafe({ company, from, role: "assistant", content: reply });
-      await sendSafe({ company, to: from, message: reply });
-
-      return;
-    }
-
     if (isAudio(message)) {
       const reply =
         "Não consigo ouvir áudio ainda. Por favor, envie sua mensagem por escrito.";
@@ -425,19 +364,20 @@ export async function handleIncomingMessage(payload) {
       return;
     }
 
+    const healthPriority = isHealthQuestion(text);
+
     const commerces = await searchSafe({ company, text });
+    const context = buildContext(commerces);
 
-    if (commerces && commerces.length > 0) {
-      const reply = formatCommerceReply(commerces);
+    let reply = await generateResponse({
+      text,
+      context,
+      company,
+      from,
+      healthPriority
+    });
 
-      await saveSafe({ company, from, role: "assistant", content: reply });
-      await sendSafe({ company, to: from, message: reply });
-
-      return;
-    }
-
-    const reply =
-      "Pois veja, boa alma… procurei em minha agenda, mas ainda não tenho registro firme sobre isso por estas bandas. Não hei de lhe passar indicação de orelhada, para não inventar notícia.";
+    if (!reply) reply = "Não consegui responder agora.";
 
     await saveSafe({ company, from, role: "assistant", content: reply });
     await sendSafe({ company, to: from, message: reply });

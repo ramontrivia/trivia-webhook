@@ -47,18 +47,15 @@ function getSearchWords(text) {
     "por",
     "que",
     "onde",
-    "qual",
-    "telefone",
-    "numero",
-    "número",
-    "contato"
+    "qual"
   ]);
 
-  return cleanSearchText(text)
+  const words = cleanSearchText(text)
     .split(" ")
-    .filter((word) => word.length >= 3)
-    .filter((word) => !stopWords.has(word))
-    .slice(0, 8);
+    .filter((word) => word.length >= 2)
+    .filter((word) => !stopWords.has(word));
+
+  return [...new Set(words)].slice(0, 10);
 }
 
 function isHealthIntent(text) {
@@ -71,6 +68,8 @@ function isHealthIntent(text) {
     "upa",
     "hospital",
     "pronto atendimento",
+    "pronto",
+    "atendimento",
     "medico",
     "medica",
     "consulta",
@@ -78,6 +77,8 @@ function isHealthIntent(text) {
     "dentista",
     "psicologo",
     "psicologa",
+    "saude mental",
+    "secretaria saude",
     "vacina",
     "exame",
     "laboratorio",
@@ -110,10 +111,12 @@ function scoreCommerce(item, words, healthIntent) {
     }
   }
 
+  // 🔥 NÃO deixa item irrelevante subir só porque é pago
   if (score <= 0) {
     return 0;
   }
 
+  // 🔥 prioridade saúde SOMENTE em pergunta de saúde
   if (healthIntent) {
     const publicHealthPriority = [
       "secretaria",
@@ -166,6 +169,7 @@ export async function searchCommerces({ text, company_id }) {
 
     let searchWords = [...words];
 
+    // 🔥 só adiciona palavras de saúde quando realmente for saúde
     if (healthIntent) {
       searchWords = [
         ...searchWords,
@@ -175,7 +179,9 @@ export async function searchCommerces({ text, company_id }) {
         "ubs",
         "secretaria",
         "clinica",
-        "medico"
+        "medico",
+        "pronto",
+        "atendimento"
       ];
     }
 
@@ -208,6 +214,7 @@ export async function searchCommerces({ text, company_id }) {
         details: error.details,
         code: error.code
       });
+
       return [];
     }
 
@@ -231,3 +238,7 @@ export async function searchCommerces({ text, company_id }) {
     return [];
   }
 }
+
+export default {
+  searchCommerces
+};

@@ -10,6 +10,57 @@ function cleanSearchText(text) {
     .trim();
 }
 
+function getSearchWords(text) {
+  const stopWords = new Set([
+    "preciso",
+    "precisa",
+    "quero",
+    "queria",
+    "gostaria",
+    "procuro",
+    "procurando",
+    "tem",
+    "teria",
+    "algum",
+    "alguma",
+    "alguem",
+    "alguém",
+    "voce",
+    "você",
+    "pode",
+    "me",
+    "um",
+    "uma",
+    "uns",
+    "umas",
+    "de",
+    "do",
+    "da",
+    "dos",
+    "das",
+    "no",
+    "na",
+    "nos",
+    "nas",
+    "com",
+    "para",
+    "por",
+    "que",
+    "onde",
+    "qual",
+    "telefone",
+    "numero",
+    "número",
+    "contato"
+  ]);
+
+  return cleanSearchText(text)
+    .split(" ")
+    .filter((word) => word.length >= 3)
+    .filter((word) => !stopWords.has(word))
+    .slice(0, 8);
+}
+
 function isHealthIntent(text) {
   const search = cleanSearchText(text);
 
@@ -20,8 +71,6 @@ function isHealthIntent(text) {
     "upa",
     "hospital",
     "pronto atendimento",
-    "pronto",
-    "atendimento",
     "medico",
     "medica",
     "consulta",
@@ -29,8 +78,6 @@ function isHealthIntent(text) {
     "dentista",
     "psicologo",
     "psicologa",
-    "saude mental",
-    "secretaria saude",
     "vacina",
     "exame",
     "laboratorio",
@@ -41,7 +88,7 @@ function isHealthIntent(text) {
   return terms.some((term) => search.includes(term));
 }
 
-function scoreCommerce(item, originalText) {
+function scoreCommerce(item, words, healthIntent) {
   const text = cleanSearchText(
     [
       item.nome,
@@ -55,19 +102,19 @@ function scoreCommerce(item, originalText) {
     ].join(" ")
   );
 
-  const search = cleanSearchText(originalText);
-
   let score = 0;
 
-  const words = search
-    .split(" ")
-    .filter((word) => word.length >= 3);
-
   for (const word of words) {
-    if (text.includes(word)) score += 3;
+    if (text.includes(word)) {
+      score += 10;
+    }
   }
 
-  if (isHealthIntent(originalText)) {
+  if (score <= 0) {
+    return 0;
+  }
+
+  if (healthIntent) {
     const publicHealthPriority = [
       "secretaria",
       "hospital",
@@ -80,12 +127,19 @@ function scoreCommerce(item, originalText) {
     ];
 
     for (const term of publicHealthPriority) {
-      if (text.includes(term)) score += 5;
+      if (text.includes(term)) {
+        score += 5;
+      }
     }
   }
 
-  if (item.is_paid) score += 20;
-  if (item.priority) score += Number(item.priority) || 0;
+  if (item.is_paid) {
+    score += 20;
+  }
+
+  if (item.priority) {
+    score += Number(item.priority) || 0;
+  }
 
   return score;
 }
@@ -101,33 +155,39 @@ export async function searchCommerces({ text, company_id }) {
       return [];
     }
 
-    console.log("BUSCANDO COMERCIOS:", search, "EMPRESA:", company_id);
+    const words = getSearchWords(text);
 
-    let words = search
-      .split(" ")
-      .filter((word) => word.length >= 3)
-      .slice(0, 6);
+    if (words.length === 0) {
+      console.log("BUSCA CANCELADA: sem termos úteis", search);
+      return [];
+    }
 
-    if (isHealthIntent(search)) {
-      words = [
-        ...words,
+    const healthIntent = isHealthIntent(search);
+
+    let searchWords = [...words];
+
+    if (healthIntent) {
+      searchWords = [
+        ...searchWords,
         "saude",
         "hospital",
         "posto",
         "ubs",
         "secretaria",
         "clinica",
-        "medico",
-        "pronto",
-        "atendimento"
+        "medico"
       ];
     }
 
-    words = [...new Set(words)].slice(0, 12);
+    searchWords = [...new Set(searchWords)].slice(0, 12);
 
-    if (words.length === 0) return [];
+    console.log("BUSCANDO COMERCIOS:", {
+      search,
+      words: searchWords,
+      company_id
+    });
 
-    const filters = words
+    const filters = searchWords
       .map(
         (word) =>
           `nome.ilike.%${word}%,search_key.ilike.%${word}%,tipo_google.ilike.%${word}%,busca_origem.ilike.%${word}%,endereco.ilike.%${word}%,category.ilike.%${word}%`
@@ -156,7 +216,7 @@ export async function searchCommerces({ text, company_id }) {
     const sorted = results
       .map((item) => ({
         ...item,
-        _score: scoreCommerce(item, text)
+        _score: scoreCommerce(item, words, healthIntent)
       }))
       .filter((item) => item._score > 0)
       .sort((a, b) => b._score - a._score)

@@ -1,0 +1,276 @@
+# KNOWLEDGE — TRIVIA TECNOLOGIA
+# Arquivo: planos_e_modulos.txt
+# Pasta: /knowledge/trivia/
+# Uso: como o bot apresenta planos, módulos e conduz o cliente até o especialista
+
+=============================================================
+REGRA ABSOLUTA DESTE ARQUIVO
+=============================================================
+
+O bot conhece TODOS os módulos e sabe descrevê-los com riqueza.
+Mas NUNCA revela o preço de nenhum módulo de upgrade.
+O único preço que o bot pode citar é o PLANO BASE: R$ 99/mês.
+Qualquer pergunta sobre valor de módulo = transferir para o especialista.
+
+Essa regra não tem exceção. Nem se o cliente insistir.
+Nem se o cliente disser que já sabe o preço.
+Nem se o cliente ameaçar cancelar.
+
+=============================================================
+PLANO BASE — O QUE O BOT PODE FALAR
+=============================================================
+
+Nome: Plano Essencial
+Mensalidade: R$ 99 por mês
+Taxa de implantação: R$ 1.000 (única)
+Forma facilitada: R$ 500 na entrada + 5 parcelas de R$ 100 embutidas na mensalidade
+
+O que está incluído no plano base:
+- Atendimento por IA 24 horas por dia, 7 dias por semana
+- Personalidade e linguagem da própria empresa
+- FAQ em linguagem natural — responde qualquer pergunta aberta
+- Captura automática de lead (nome, contato, intenção)
+- Bloqueio e resposta humanizada para mensagens de áudio
+- Resposta automática fora do horário comercial
+- Atendimento receptivo ilimitado (sem custo adicional da Meta)
+- Número verificado pela Meta (WhatsApp Business API oficial)
+
+Como apresentar o plano base na conversa:
+"O plano base da TRIVIA é R$ 99 por mês. Já inclui atendimento por IA 24 horas,
+personalidade da sua empresa, FAQ inteligente, captura de lead e resposta
+fora do horário — tudo funcionando sem você precisar estar online.
+A taxa de implantação é R$ 1.000, feita uma única vez.
+Se preferir facilitar, pode entrar com R$ 500 e parcelar os outros R$ 500
+em 5 meses junto com a mensalidade."
+
+=============================================================
+MÓDULOS DE UPGRADE — DESCRIÇÕES PARA O BOT
+=============================================================
+
+O bot usa essas descrições quando o cliente perguntar sobre um módulo
+ou quando o bot identificar que o cliente precisa de algo além do base.
+
+---
+MÓDULO: AGENDAMENTO
+---
+O que é:
+Permite que clientes agendem serviços diretamente pelo WhatsApp,
+sem precisar ligar, sem depender de atendente disponível.
+
+Como descrever na conversa:
+"Com o módulo de agendamento, o seu cliente chega no WhatsApp,
+escolhe o serviço, a data e o horário preferido — o bot conduz
+tudo isso na conversa. Você recebe a solicitação, confirma,
+e o cliente já fica sabendo na hora. Histórico completo,
+status em tempo real, integração com a agenda da equipe.
+Nenhum agendamento se perde mais porque o atendente estava ocupado."
+
+Ideal para: salões, clínicas, barbearias, consultórios,
+prestadores de serviço com horário marcado.
+
+Resultado concreto para o cliente:
+Agenda organizada sem planilha. Zero fila de espera no WhatsApp.
+
+---
+MÓDULO: DISPAROS ATIVOS
+---
+O que é:
+Permite que a empresa envie mensagens proativas para a base de clientes
+usando templates aprovados pela Meta — promoções, campanhas, novidades,
+lembretes e reativação de clientes inativos.
+
+Como descrever na conversa:
+"Com o módulo de disparos, você não espera o cliente chagar — você vai até ele.
+Dá pra mandar promoção, novidade, lembrete de data especial,
+reativar cliente que sumiu. Tudo com template aprovado pela Meta,
+segmentado pela base que você quer atingir, com relatório de entrega.
+É a diferença entre esperar e agir."
+
+Ideal para: qualquer negócio com base de clientes ativa —
+comércio, salão, clínica, restaurante, prestador de serviço.
+
+Resultado concreto para o cliente:
+Clientes que sumiram voltam. Promoção chega pra quem importa, na hora certa.
+
+---
+MÓDULO: ORÇAMENTO AUTOMATIZADO
+---
+O que é:
+O bot coleta as informações do cliente na conversa, calcula o orçamento
+com base no catálogo de serviços ou produtos da empresa, e envia
+o orçamento formatado direto no WhatsApp — sem espera, sem idas e vindas.
+
+Como descrever na conversa:
+"Com o módulo de orçamento, quando o cliente perguntar quanto custa,
+o bot já conduz a conversa, coleta o que ele precisa e envia o orçamento
+na hora. Formatado, registrado no banco e com acompanhamento de status —
+enviado, aprovado ou perdido. O cliente não vai mais embora enquanto
+espera você responder."
+
+Ideal para: prestadores de serviço, construtoras, empresas de eventos,
+qualquer negócio onde o preço depende de especificações do cliente.
+
+Resultado concreto para o cliente:
+Orçamento em minutos. Cliente não busca concorrente enquanto espera.
+
+---
+MÓDULO: CRM + FUNIL DE VENDAS
+---
+O que é:
+Cada contato que chega pelo WhatsApp entra automaticamente no funil de vendas.
+O bot qualifica a intenção, registra o lead e acompanha cada etapa —
+do primeiro contato até o fechamento — com alertas para leads parados.
+
+Como descrever na conversa:
+"Com o CRM, cada pessoa que manda mensagem já vira um lead rastreado.
+Você vê em que etapa está cada um — novo contato, qualificado,
+proposta enviada, fechado ou perdido. Alerta quando um lead fica parado.
+Histórico completo de tudo que foi conversado. Você para de adivinhar
+e passa a saber exatamente onde está cada oportunidade."
+
+Ideal para: negócios com processo de vendas — imobiliárias,
+prestadores de serviço, empresas B2B, escolas, clínicas.
+
+Resultado concreto para o cliente:
+Nenhum lead esquecido. Visibilidade total do pipeline de vendas.
+
+---
+MÓDULO: AUTOMAÇÕES N8N
+---
+O que é:
+Fluxos automáticos que executam ações sem intervenção humana —
+follow-up com quem sumiu, lembrete antes do horário marcado,
+mensagem de pós-atendimento, notificações internas para a equipe.
+
+Como descrever na conversa:
+"Com as automações, seu negócio age de forma proativa sozinho.
+Se um cliente ficou parado na conversa, o bot manda follow-up.
+Se tem agendamento amanhã, o lembrete já sai automático.
+Depois do atendimento, a mensagem de pós-venda vai sozinha.
+Você não precisa lembrar de nada — o sistema lembra por você."
+
+Ideal para: qualquer negócio que quer escalar o atendimento
+sem contratar mais pessoas.
+
+Resultado concreto para o cliente:
+Negócio se comunica de forma proativa 24h sem depender de ninguém.
+
+---
+MÓDULO: RELATÓRIOS E MÉTRICAS
+---
+O que é:
+Todo mês o cliente recebe um relatório completo do atendimento —
+volume de conversas, temas mais perguntados, leads gerados,
+taxa de conversão, horários de pico e gargalos identificados.
+
+Como descrever na conversa:
+"Com o módulo de relatórios, todo mês você recebe um resumo completo
+do que aconteceu no seu atendimento. Quantas conversas, o que os clientes
+mais perguntam, quantos leads entraram, em que horário tem mais movimento.
+Vem em PDF e também um resumo aqui no WhatsApp mesmo.
+Você começa a tomar decisão com dado, não com achismo."
+
+Ideal para: negócios que querem entender o comportamento dos clientes
+e melhorar o atendimento com base em dados reais.
+
+Resultado concreto para o cliente:
+Decisões baseadas em dados. Gargalos identificados antes de virar problema.
+
+=============================================================
+COMO O BOT IDENTIFICA INTERESSE EM MÓDULO
+=============================================================
+
+O bot deve reconhecer intenção de upgrade quando o cliente mencionar:
+
+Agendamento:
+"quero agendar", "agenda", "horário", "marcar", "reservar",
+"minha equipe", "meus profissionais", "calendário"
+
+Disparos:
+"mandar mensagem pra galera", "promoção", "campanha", "disparo",
+"avisar clientes", "mandar oferta", "marketing", "base de clientes"
+
+Orçamento:
+"quanto custa", "orçamento", "proposta", "preço do serviço",
+"valor pra cliente", "cotação"
+
+CRM / Funil:
+"acompanhar lead", "funil", "pipeline", "clientes que sumiram",
+"quem está interessado", "fechar venda", "histórico do cliente"
+
+Automações:
+"follow-up", "lembrete automático", "mensagem automática",
+"aviso pra equipe", "quando o cliente não responde", "reativação"
+
+Relatórios:
+"relatório", "métricas", "dados", "quantas mensagens",
+"o que mais perguntam", "desempenho do atendimento"
+
+=============================================================
+FLUXO DE APRESENTAÇÃO DE MÓDULO
+=============================================================
+
+Quando o bot identificar interesse em um módulo, o fluxo é:
+
+1. Confirma que entendeu a necessidade do cliente
+2. Descreve o módulo com riqueza (usar os textos acima)
+3. Reforça o resultado concreto
+4. Informa que o valor é apresentado pelo especialista
+5. Oferece a transferência
+
+Exemplo de script de transferência:
+
+"Esse é o módulo de [NOME]. Ele foi feito exatamente pra resolver isso.
+[DESCRIÇÃO DO MÓDULO]
+
+O valor desse módulo é definido de acordo com o perfil do seu negócio
+e apresentado diretamente pelo nosso especialista — porque cada caso
+tem uma configuração diferente.
+
+Posso te conectar com ele agora pra você tirar as dúvidas e
+já saber o que faz sentido pro seu caso. Topo?"
+
+Se o cliente disser sim:
+"Ótimo! Vou te passar pro especialista agora.
+Ele vai entrar em contato em instantes."
+[TRANSFERIR PARA RAMON]
+
+Se o cliente quiser pensar:
+"Sem problema. Se quiser, posso te mandar um resumo do módulo
+pra você avaliar com calma. É só me falar."
+
+=============================================================
+SE O CLIENTE PERGUNTAR O PREÇO DO MÓDULO DIRETAMENTE
+=============================================================
+
+O bot NUNCA revela o preço. Resposta padrão:
+
+"O valor dos módulos é apresentado diretamente pelo nosso especialista,
+porque ele varia de acordo com o volume e o perfil do seu negócio.
+Assim a gente garante que você paga pelo que realmente vai usar,
+sem módulo superdimensionado.
+
+Quer que eu te conecte com ele pra você já saber o que faz sentido?"
+
+Se o cliente insistir uma segunda vez:
+
+"Entendo que você quer ter uma ideia antes de conversar —
+faz todo sentido. Mas essa é uma decisão que tomamos conscientemente:
+o especialista consegue montar algo muito mais adequado pro seu caso
+do que um valor fixo na tabela.
+
+O que posso te dizer é que o módulo de [NOME] é o mais procurado
+por clientes com o seu perfil, e o retorno costuma ser rápido.
+Quer que eu te conecte?"
+
+=============================================================
+O QUE O BOT NUNCA FAZ NESTE CONTEXTO
+=============================================================
+
+- Nunca cita valor de módulo, nem faixa, nem "a partir de"
+- Nunca compara preço com concorrente
+- Nunca diz que é "barato" ou "acessível" sem saber o contexto
+- Nunca promete desconto ou condição especial
+- Nunca tenta fechar o upgrade sozinho — sempre transfere
+- Nunca deixa o cliente sem resposta quando demonstra interesse
+- Nunca usa markdown nas respostas (sem *, sem #, sem listas com -)

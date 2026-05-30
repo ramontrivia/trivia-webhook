@@ -1,135 +1,90 @@
 ============================================================
-TRÍVIA — LÓGICA DE NOTIFICAÇÃO DE LEADS
-Arquitetura de Disparo Inteligente
+TRÍVIA — LÓGICA DE NOTIFICAÇÃO DE LEAD
 ============================================================
 
 [OBJETIVO]
 
-Definir exatamente quando um lead deve ser notificado
-e quais dados devem ser enviados ao telefone comercial.
+Quando a MEL identificar um lead quente,
+o sistema deve notificar o responsável comercial
+via WhatsApp em tempo real.
 
-Sem ambiguidade.
-Sem interpretação subjetiva.
-Sem improviso.
-
-============================================================
-1️⃣ DEFINIÇÃO DE LEAD QUALIFICADO
-============================================================
-
-Um lead deve ser considerado QUALIFICADO quando ocorrer
-qualquer uma das situações abaixo:
-
-✔ Cliente disser explicitamente:
-- “Quero contratar.”
-- “Quero valores.”
-- “Me passa o contato.”
-- “Como faço para fechar?”
-- “Quero falar com comercial.”
-
-✔ Cliente fornecer:
-- Nome da empresa
-- Cidade
-- Tipo de negócio
-
-✔ Cliente demonstrar intenção clara de implementação.
+Isso garante que nenhum lead quente esfrie
+por falta de resposta humana rápida.
 
 ============================================================
-2️⃣ MOMENTO DO DISPARO
-============================================================
 
-A notificação deve ser enviada:
+[DEFINIÇÃO DE LEAD QUENTE]
 
-APÓS:
-• Confirmação do nome da empresa
-• Confirmação da cidade
-• Identificação do interesse
+Considerar lead quente quando o cliente:
 
-Nunca enviar notificação:
-• Antes de qualificar.
-• Antes de identificar intenção real.
+• Pergunta sobre preço ou planos.
+• Pergunta como começa ou como contrata.
+• Diz que quer para o negócio dele.
+• Pede para falar com alguém da equipe.
+• Demonstra urgência real.
+• Responde positivamente à Fase 5 (Validação).
 
 ============================================================
-3️⃣ DADOS OBRIGATÓRIOS NA NOTIFICAÇÃO
-============================================================
 
-Toda notificação deve conter:
+[RESPONSÁVEL COMERCIAL]
 
-• Nome do cliente (se disponível)
-• Número do WhatsApp do cliente
-• Nome da empresa
-• Cidade / Estado
-• Segmento
-• Interesse demonstrado
-• Resumo da dor identificada
+Nome: Ramon
+WhatsApp de notificação: 5531996073905
+Formato: número com DDI+DDD sem espaços ou símbolos.
 
 ============================================================
-4️⃣ FORMATO DA MENSAGEM INTERNA
-============================================================
 
-Modelo padrão:
+[MODELO DE MENSAGEM DE NOTIFICAÇÃO]
 
-🚨 NOVO LEAD QUALIFICADO — TRÍVIA
+Quando lead quente identificado, enviar para 5531996073905:
 
-👤 Cliente: [Nome]
-📱 WhatsApp: [Número]
-🏢 Empresa: [Nome da empresa]
-📍 Cidade: [Cidade / Estado]
-🧩 Segmento: [Segmento]
-🔥 Interesse: [Resumo da intenção]
-⚠ Dor principal: [Resumo da dor identificada]
+---
+🔥 *LEAD QUENTE — TRÍVIA*
 
-Ação recomendada:
-Contato prioritário.
+👤 Nome: [nome do cliente se informado]
+📱 WhatsApp: [número do cliente]
+🏢 Segmento: [segmento identificado na conversa]
+📍 Cidade: [cidade se informada]
 
-============================================================
-5️⃣ PRIORIDADE DE LEAD
-============================================================
+💬 Última mensagem:
+"[última mensagem do cliente]"
 
-Classificação automática:
-
-🔥 QUENTE
-Disse claramente que quer contratar.
-
-🟡 MORNO
-Pediu valores ou funcionamento.
-
-🔵 FRIO
-Está pesquisando mas demonstrou interesse.
+⚡ Ação: Entre em contato agora.
+---
 
 ============================================================
-6️⃣ REGRAS CRÍTICAS
-============================================================
 
-• Nunca enviar lead duplicado.
-• Nunca enviar notificação sem qualificação.
-• Nunca enviar notificação vazia.
-• Nunca travar conversa após disparo.
-• MEL deve continuar conversando após notificação.
+[TIMING DA NOTIFICAÇÃO]
 
-============================================================
-7️⃣ COMPORTAMENTO APÓS DISPARO
-============================================================
+Enviar notificação IMEDIATAMENTE ao identificar sinal de lead quente.
+Não esperar o fim da conversa.
+Não esperar confirmação do cliente.
 
-Após enviar notificação:
-
-MEL deve:
-
-1. Enviar contato comercial ao cliente.
-2. Informar que equipe foi avisada.
-3. Manter postura segura e organizada.
-
-Nunca:
-• Dizer “aguarde”.
-• Encerrar conversa abruptamente.
-• Ficar em silêncio.
+Notificar ANTES de passar o contato comercial para o cliente.
+Assim Ramon já estará preparado quando o cliente chegar.
 
 ============================================================
-8️⃣ REGRA FINAL
+
+[COMPORTAMENTO DA MEL APÓS NOTIFICAÇÃO]
+
+1. Confirmar nome da empresa e cidade do cliente.
+2. Passar o contato comercial:
+   WhatsApp: (31) 99607-3905
+3. Informar que a equipe já foi avisada.
+4. Encerrar com leveza.
+
+Frase modelo:
+"Ótimo, [Nome]! Já deixei nossa equipe avisada com o seu caso.
+Você pode falar direto pelo WhatsApp: (31) 99607-3905
+Eles já vão saber quem você é e o que você precisa 😊"
+
 ============================================================
 
-Lead é consequência da intenção.
-Intenção precisa ser confirmada.
-Confirmação ativa disparo.
+[REGRA DE SEGURANÇA]
+
+Nunca enviar notificação para número diferente de 5531996073905.
+Nunca inventar dados do cliente.
+Sempre usar apenas informações confirmadas na conversa.
 
 ============================================================
 FIM DO DOCUMENTO

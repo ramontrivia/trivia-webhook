@@ -388,10 +388,25 @@ export async function processCrmFromMessage(lead, message) {
     await updateLead(lead.id, { interested_modules: merged });
   }
 
-  // Lead pediu especialista → avança pra quente automaticamente
-  if (intentions.includes('especialista') && lead.stage === STAGES.QUALIFICADO) {
-    await advanceStage(lead.id, STAGES.ESPECIALISTA, 'mel',
-      'Lead pediu para falar com especialista');
+  // ── Lead quer especialista → avança direto, qualquer stage ──
+  // Não exige mais passar por 'qualificado' antes.
+  // Se sinalizou intenção de contratar, vai direto pra quente.
+  const stagesFinais = [
+    STAGES.ESPECIALISTA,
+    STAGES.NEGOCIANDO,
+    STAGES.IMPLANTACAO,
+    STAGES.CLIENTE_ATIVO,
+    STAGES.PERDIDO,
+  ];
+
+  if (intentions.includes('especialista') && !stagesFinais.includes(lead.stage)) {
+    await advanceStage(
+      lead.id,
+      STAGES.ESPECIALISTA,
+      'mel',
+      'Lead sinalizou intenção de contratar'
+    );
+    return; // já avançou pro máximo, não processa mais
   }
 
   // Lead novo com intenção clara → qualifica e vai pra morno

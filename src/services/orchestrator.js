@@ -1,3 +1,4 @@
+console.log("📦 PAYLOAD BRUTO:", JSON.stringify(payload, null, 2));
 import * as Companies from "./companies.js";
 import * as Messages   from "./messages.js";
 import * as Commerces  from "./commerces.js";

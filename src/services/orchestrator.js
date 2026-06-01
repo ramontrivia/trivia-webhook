@@ -3,6 +3,7 @@ import * as Messages   from "./messages.js";
 import * as Commerces  from "./commerces.js";
 import * as OpenAI     from "./openai.js";
 import * as WhatsApp   from "./whatsapp.js";
+import axios           from "axios";
 
 import {
   extractCommerceFromImage,
@@ -31,6 +32,11 @@ const downloadMediaAsBase64 = WhatsApp.downloadMediaAsBase64;
 const ADMIN_PHONES   = ["553199646223"];
 const importSessions = new Map();
 
+// ── Instagram Page ID da TRIVIA ───────────────────────────────
+const INSTAGRAM_PAGE_ID = "17841402938162053";
+const INSTAGRAM_TOKEN   = process.env.INSTAGRAM_TOKEN;
+const GRAPH_VERSION     = process.env.GRAPH_VERSION || "v19.0";
+
 function normalize(text = "") {
   return String(text)
     .toLowerCase()
@@ -55,16 +61,59 @@ function hasImportSession(company, from) {
   return importSessions.has(getImportKey(company, from));
 }
 
-function getPayload(payload) {
+// ── Detecta canal (WhatsApp ou Instagram) ────────────────────
+function detectChannel(payload) {
+  const entry   = payload?.entry?.[0];
+  const changes = entry?.changes?.[0];
+  const field   = changes?.field;
+
+  // Instagram: field = "messages" mas vem de página do Instagram
+  // WhatsApp:  field = "messages" mas vem com phone_number_id
+  const value = changes?.value;
+
+  if (value?.metadata?.phone_number_id) return "whatsapp";
+  if (field === "messages" && value?.sender_action !== undefined) return "instagram";
+  if (entry?.id === INSTAGRAM_PAGE_ID) return "instagram";
+
+  // Fallback: tenta detectar pelo formato da mensagem
+  const msg = value?.messages?.[0];
+  if (msg?.from && !value?.metadata?.phone_number_id) return "instagram";
+
+  return "whatsapp";
+}
+
+// ── Parser WhatsApp ───────────────────────────────────────────
+function getWhatsAppPayload(payload) {
   const value   = payload?.entry?.[0]?.changes?.[0]?.value;
   const message = value?.messages?.[0];
 
   return {
+    channel:       "whatsapp",
     phoneNumberId: value?.metadata?.phone_number_id,
     message,
     from:          message?.from,
     text:          message?.text?.body || "",
     isStatusOnly:  !message && Array.isArray(value?.statuses)
+  };
+}
+
+// ── Parser Instagram ──────────────────────────────────────────
+function getInstagramPayload(payload) {
+  const entry   = payload?.entry?.[0];
+  const changes = entry?.changes?.[0];
+  const value   = changes?.value;
+  const message = value?.messages?.[0];
+
+  // Instagram manda o texto direto em message.text (sem .body)
+  const text = message?.text?.body || message?.text || "";
+
+  return {
+    channel:       "instagram",
+    phoneNumberId: INSTAGRAM_PAGE_ID,
+    message,
+    from:          message?.from || value?.sender?.id,
+    text:          String(text),
+    isStatusOnly:  !message
   };
 }
 
@@ -179,6 +228,40 @@ async function sendSafe({ company, to, message }) {
   }
 }
 
+// ── Enviar mensagem pelo Instagram ────────────────────────────
+async function sendInstagramMessage({ to, message }) {
+  try {
+    if (!INSTAGRAM_TOKEN) {
+      console.log("❌ INSTAGRAM_TOKEN ausente");
+      return;
+    }
+
+    await axios.post(
+      `https://graph.facebook.com/${GRAPH_VERSION}/me/messages`,
+      {
+        recipient: { id: to },
+        message:   { text: message },
+        messaging_type: "RESPONSE"
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${INSTAGRAM_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
+
+    console.log(`✅ INSTAGRAM OK: mensagem enviada para ${to}`);
+  } catch (err) {
+    console.log("❌ ERRO INSTAGRAM:", {
+      message: err?.message,
+      status:  err?.response?.status,
+      data:    err?.response?.data
+    });
+  }
+}
+
 async function searchSafe({ company, text }) {
   try {
     return await searchCommerces({
@@ -259,31 +342,91 @@ async function handleAdminMessage({ company, from, text, message }) {
   return false;
 }
 
+// ── HANDLER INSTAGRAM ─────────────────────────────────────────
+async function handleInstagramMessage({ from, text, message, company, lead }) {
+  console.log(`📸 INSTAGRAM | from: ${from} | texto: ${text}`);
+
+  // Salva mensagem do usuário
+  await saveSafe({ company, from, role: "user", content: text || "[SEM TEXTO]" });
+
+  if (!text) {
+    const reply = "Oi! 😊 Pode me enviar sua mensagem em texto?";
+    await saveSafe({ company, from, role: "assistant", content: reply });
+    await sendInstagramMessage({ to: from, message: reply });
+    return;
+  }
+
+  // Gera resposta via IA com knowledge do Instagram
+  // O knowledge da pasta /trivia/ já tem a personalidade base
+  // O sistema vai usar o mesmo prompt mas com instrução de direcionar pro WhatsApp
+  const instagramContext = `
+CANAL: Instagram DM
+INSTRUÇÃO ESPECIAL: Você está respondendo uma mensagem do Instagram.
+Faça o primeiro contato de forma leve e acolhedora.
+Após entender o interesse da pessoa, convide-a para continuar a conversa pelo WhatsApp da TRÍVIA: (31) 97104-5733
+Não tente fechar nada pelo Instagram — apenas acolha e direcione pro WhatsApp.
+  `.trim();
+
+  let reply = await generateResponse({
+    text,
+    context:       instagramContext,
+    company,
+    from,
+    healthPriority: false,
+    lead
+  });
+
+  if (!reply) reply = "Oi! 😊 Que bom te ver por aqui! Me conta o que você precisa.";
+
+  // Salva e envia
+  await saveSafe({ company, from, role: "assistant", content: reply });
+  await sendInstagramMessage({ to: from, message: reply });
+
+  // Registra interação no CRM
+  if (lead) {
+    try {
+      await registerInteraction(lead.id, "instagram_in",  text.slice(0, 200),  "client");
+      await registerInteraction(lead.id, "instagram_out", reply.slice(0, 200), "mel");
+    } catch (err) {
+      console.log("⚠️ CRM Instagram interaction falhou:", err.message);
+    }
+  }
+}
+
 // ── HANDLER PRINCIPAL ─────────────────────────────────────────
 export async function handleIncomingMessage(payload) {
   try {
     console.log("🔥 WEBHOOK RECEBIDO");
 
-    const { phoneNumberId, message, from, text, isStatusOnly } = getPayload(payload);
+    // ── Detecta canal ─────────────────────────────────────────
+    const channel = detectChannel(payload);
+    console.log(`📡 CANAL: ${channel}`);
+
+    // ── Parseia payload conforme canal ────────────────────────
+    const parsed = channel === "instagram"
+      ? getInstagramPayload(payload)
+      : getWhatsAppPayload(payload);
+
+    const { phoneNumberId, message, from, text, isStatusOnly } = parsed;
 
     if (isStatusOnly) {
       console.log("ℹ️ Evento de status ignorado.");
       return;
     }
 
-    if (!phoneNumberId || !message || !from) {
+    if (!message || !from) {
       console.log("❌ Payload incompleto");
       return;
     }
 
+    // ── Busca empresa ─────────────────────────────────────────
     const company = await getCompanySafe(phoneNumberId);
     if (!company) {
-      console.log("❌ Empresa não encontrada");
+      console.log("❌ Empresa não encontrada para:", phoneNumberId);
       return;
     }
 
-    // ── CRM: busca ou cria lead ──────────────────────────────
-    // Roda em paralelo com o resto — não bloqueia o atendimento
+    // ── CRM: busca ou cria lead ───────────────────────────────
     let lead = null;
     try {
       lead = await getOrCreateLead(from, company.company_id);
@@ -291,7 +434,14 @@ export async function handleIncomingMessage(payload) {
     } catch (err) {
       console.log("⚠️ CRM getOrCreateLead falhou (não crítico):", err.message);
     }
-    // ────────────────────────────────────────────────────────
+
+    // ── Roteamento por canal ──────────────────────────────────
+    if (channel === "instagram") {
+      await handleInstagramMessage({ from, text, message, company, lead });
+      return;
+    }
+
+    // ── Fluxo WhatsApp (original) ─────────────────────────────
 
     // Admin flow
     if (isAdmin(from)) {
@@ -327,7 +477,7 @@ export async function handleIncomingMessage(payload) {
       return;
     }
 
-    // ── CRM: processa intenção da mensagem ───────────────────
+    // CRM: processa intenção
     if (lead) {
       try {
         await processCrmFromMessage(lead, text);
@@ -336,32 +486,28 @@ export async function handleIncomingMessage(payload) {
         console.log("⚠️ CRM processCrmFromMessage falhou (não crítico):", err.message);
       }
     }
-    // ────────────────────────────────────────────────────────
 
-    // Busca comércios (mantido pra bandeirante e outros clientes)
+    // Busca comércios
     const healthPriority = isHealthQuestion(text);
     const commerces      = await searchSafe({ company, text });
     const context        = buildContext(commerces);
 
-    // ── Gera resposta via IA (com fase do lead injetada) ─────
-    // O lead é passado completo — openai.js lê lead.lead_phase
-    // e injeta o comportamento correto (frio/morno/quente)
+    // Gera resposta via IA
     let reply = await generateResponse({
       text,
       context,
       company,
       from,
       healthPriority,
-      lead           // ← NOVO: passa o lead com lead_phase
+      lead
     });
     if (!reply) reply = "Não consegui responder agora.";
-    // ────────────────────────────────────────────────────────
 
-    // Salva e envia resposta
+    // Salva e envia
     await saveSafe({ company, from, role: "assistant", content: reply });
     await sendSafe({ company, to: from, message: reply });
 
-    // ── CRM: registra resposta do assistente ─────────────────
+    // CRM: registra resposta
     if (lead) {
       try {
         await registerInteraction(lead.id, "whatsapp_out", reply.slice(0, 200), "mel");
@@ -369,11 +515,11 @@ export async function handleIncomingMessage(payload) {
         console.log("⚠️ CRM registerInteraction saída falhou (não crítico):", err.message);
       }
     }
-    // ────────────────────────────────────────────────────────
 
   } catch (error) {
     console.error("💥 ERRO GERAL:", error);
   }
 }
 
+export { handleIncomingMessage };
 export default handleIncomingMessage;

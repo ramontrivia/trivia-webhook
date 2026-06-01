@@ -521,5 +521,4 @@ export async function handleIncomingMessage(payload) {
   }
 }
 
-export { handleIncomingMessage };
 export default handleIncomingMessage;

@@ -230,11 +230,12 @@ async function sendInstagramMessage({ to, message }) {
     }
 
     await axios.post(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${INSTAGRAM_PAGE_ID}/messages`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/me/messages`,
       {
         recipient: { id: to },
         message:   { text: message },
-        messaging_type: "RESPONSE"
+        messaging_type: "RESPONSE",
+        access_token: INSTAGRAM_TOKEN
       },
       {
         headers: {

@@ -397,7 +397,7 @@ Não tente fechar nada pelo Instagram — apenas acolha e direcione pro WhatsApp
 export async function handleIncomingMessage(payload) {
   try {
     console.log("🔥 WEBHOOK RECEBIDO");
-    console.log("📦 PAYLOAD:", JSON.stringify(payload?.entry?.[0]?.changes?.[0]?.value, null, 2));
+    console.log("📦 PAYLOAD COMPLETO:", JSON.stringify(payload, null, 2));
 
     // ── Detecta canal ─────────────────────────────────────────
     const channel = detectChannel(payload);

@@ -21,13 +21,32 @@ export const STAGES = {
 };
 
 // ============================================================
+// MAPEAMENTO STAGE → LEAD_PHASE
+// Toda vez que o stage muda, a fase da MEL muda junto.
+// Assim o comportamento da MEL é sempre consistente com o funil.
+// ============================================================
+
+const STAGE_TO_PHASE = {
+  novo_lead:    'frio',
+  perdido:      'frio',
+  qualificado:  'morno',
+  especialista: 'quente',
+  negociando:   'quente',
+  implantacao:  'quente',
+  cliente_ativo:'quente',
+};
+
+function stageToPhase(stage) {
+  return STAGE_TO_PHASE[stage] || 'frio';
+}
+
+// ============================================================
 // BUSCAR OU CRIAR LEAD PELO TELEFONE
 // Chamado pelo orchestrator quando chega mensagem nova
 // ============================================================
 
 export async function getOrCreateLead(phone, companyId) {
   try {
-    // Busca lead existente
     const { data: existing, error: fetchError } = await supabase
       .from('leads')
       .select('*')
@@ -41,22 +60,28 @@ export async function getOrCreateLead(phone, companyId) {
     }
 
     if (existing) {
-      // Atualiza último contato
+      // Atualiza último contato e última mensagem recebida
       await supabase
         .from('leads')
-        .update({ last_contact_at: new Date().toISOString() })
+        .update({
+          last_contact_at: new Date().toISOString(),
+          last_inbound_at: new Date().toISOString(),
+        })
         .eq('id', existing.id);
       return existing;
     }
 
-    // Cria novo lead
+    // Cria novo lead — entra como frio por padrão
     const { data: newLead, error: createError } = await supabase
       .from('leads')
       .insert({
         phone,
-        company_id: companyId,
-        stage: STAGES.NOVO_LEAD,
-        source: 'whatsapp',
+        company_id:      companyId,
+        stage:           STAGES.NOVO_LEAD,
+        lead_phase:      'frio',
+        lead_score:      0,
+        source:          'whatsapp',
+        last_inbound_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -66,7 +91,7 @@ export async function getOrCreateLead(phone, companyId) {
       return null;
     }
 
-    console.log(`[CRM] Novo lead criado: ${phone}`);
+    console.log(`[CRM] Novo lead criado: ${phone} | fase: frio`);
     return newLead;
 
   } catch (err) {
@@ -77,7 +102,6 @@ export async function getOrCreateLead(phone, companyId) {
 
 // ============================================================
 // ATUALIZAR DADOS DO LEAD
-// Chamado pela Mel quando coleta informações na conversa
 // ============================================================
 
 export async function updateLead(leadId, data) {
@@ -104,24 +128,32 @@ export async function updateLead(leadId, data) {
 
 // ============================================================
 // AVANÇAR ETAPA DO FUNIL
+// Atualiza stage E lead_phase juntos — sempre sincronizados.
 // ============================================================
 
 export async function advanceStage(leadId, newStage, changedBy = 'mel', note = null) {
   try {
-    // Busca etapa atual
     const { data: lead } = await supabase
       .from('leads')
-      .select('stage, name, phone, business_name')
+      .select('stage, lead_phase, name, phone, business_name')
       .eq('id', leadId)
       .single();
 
     if (!lead) return false;
-    if (lead.stage === newStage) return true; // Já está nessa etapa
+    if (lead.stage === newStage) return true;
 
-    // Atualiza etapa
+    // ── Calcula nova fase com base no novo stage ──────────────
+    const newPhase = stageToPhase(newStage);
+    const phaseChanged = lead.lead_phase !== newPhase;
+
+    // ── Atualiza stage + lead_phase juntos ────────────────────
     const { error } = await supabase
       .from('leads')
-      .update({ stage: newStage })
+      .update({
+        stage:            newStage,
+        lead_phase:       newPhase,
+        phase_updated_at: new Date().toISOString(),
+      })
       .eq('id', leadId);
 
     if (error) {
@@ -129,13 +161,21 @@ export async function advanceStage(leadId, newStage, changedBy = 'mel', note = n
       return false;
     }
 
-    // Registra interação
-    await registerInteraction(leadId, 'stage_change', `${lead.stage} → ${newStage}`, changedBy);
+    // Registra mudança de stage
+    await registerInteraction(leadId, 'stage_change',
+      `${lead.stage} → ${newStage}`, changedBy);
+
+    // Registra mudança de fase se mudou
+    if (phaseChanged) {
+      await registerInteraction(leadId, 'phase_change',
+        `${lead.lead_phase} → ${newPhase}`, changedBy);
+      console.log(`[CRM] Lead ${lead.phone} | fase: ${lead.lead_phase} → ${newPhase}`);
+    }
 
     // Dispara notificação se necessário
     await checkAndNotify(leadId, lead, newStage, note);
 
-    console.log(`[CRM] Lead ${lead.phone} avançou: ${lead.stage} → ${newStage}`);
+    console.log(`[CRM] Lead ${lead.phone} | stage: ${lead.stage} → ${newStage}`);
     return true;
 
   } catch (err) {
@@ -160,7 +200,6 @@ export async function registerInteraction(leadId, type, summary, createdBy = 'me
 
 // ============================================================
 // QUALIFICAR LEAD AUTOMATICAMENTE
-// Chamado pela Mel quando identifica dor + interesse
 // ============================================================
 
 export async function qualifyLead(leadId, qualificationData) {
@@ -174,17 +213,15 @@ export async function qualifyLead(leadId, qualificationData) {
   } = qualificationData;
 
   try {
-    // Atualiza dados de qualificação
     await updateLead(leadId, {
       name,
-      business_name: businessName,
-      business_type: businessType,
+      business_name:     businessName,
+      business_type:     businessType,
       city,
-      pain_description: painDescription,
-      interested_modules: interestedModules,
+      pain_description:  painDescription,
+      interested_modules:interestedModules,
     });
 
-    // Avança para qualificado
     await advanceStage(leadId, STAGES.QUALIFICADO, 'mel',
       `Qualificado pela Mel. Dor: ${painDescription}`);
 
@@ -196,21 +233,21 @@ export async function qualifyLead(leadId, qualificationData) {
 }
 
 // ============================================================
-// NOTIFICAR RAMON — quando lead precisa de ação
+// NOTIFICAR RAMON
 // ============================================================
 
 async function checkAndNotify(leadId, lead, newStage, note) {
   const notifyOnStages = {
     [STAGES.QUALIFICADO]: {
-      type: 'lead_qualificado',
+      type:    'lead_qualificado',
       message: `🔥 Lead qualificado!\n${lead.name || lead.phone} — ${lead.business_name || 'Negócio não informado'}\nDor identificada. Pronto pra você agir.`,
     },
     [STAGES.ESPECIALISTA]: {
-      type: 'especialista_acionado',
+      type:    'especialista_acionado',
       message: `📞 Especialista acionado!\n${lead.name || lead.phone} quer falar com você.\nContato: ${lead.phone}`,
     },
     [STAGES.CLIENTE_ATIVO]: {
-      type: 'cliente_novo',
+      type:    'cliente_novo',
       message: `🎉 Novo cliente ativo!\n${lead.business_name || lead.name || lead.phone} está no ar.`,
     },
   };
@@ -222,22 +259,19 @@ async function checkAndNotify(leadId, lead, newStage, note) {
     .from('crm_notifications')
     .insert({
       lead_id: leadId,
-      type: notif.type,
+      type:    notif.type,
       message: note ? `${notif.message}\n\nObs: ${note}` : notif.message,
     });
 }
 
 // ============================================================
-// BUSCAR NOTIFICAÇÕES NÃO LIDAS DO RAMON
+// BUSCAR NOTIFICAÇÕES NÃO LIDAS
 // ============================================================
 
 export async function getUnreadNotifications() {
   const { data, error } = await supabase
     .from('crm_notifications')
-    .select(`
-      *,
-      leads (name, phone, business_name, stage)
-    `)
+    .select(`*, leads (name, phone, business_name, stage)`)
     .eq('read', false)
     .order('sent_at', { ascending: false });
 
@@ -262,12 +296,12 @@ export async function markNotificationsRead(ids = []) {
 }
 
 // ============================================================
-// BUSCAR LEADS QUENTES (parados > 1 dia em etapas ativas)
+// BUSCAR LEADS QUENTES
 // ============================================================
 
 export async function getHotLeads() {
   const { data, error } = await supabase
-    .from('hot_leads') // view criada no SQL
+    .from('hot_leads')
     .select('*');
 
   if (error) {
@@ -306,7 +340,6 @@ export async function markAsLost(leadId, reason) {
 
 // ============================================================
 // DETECÇÃO AUTOMÁTICA DE INTENÇÃO NA MENSAGEM
-// Usado pelo orchestrator pra alimentar o CRM sem intervenção manual
 // ============================================================
 
 export function detectIntention(message) {
@@ -345,7 +378,6 @@ export async function processCrmFromMessage(lead, message) {
   const intentions = detectIntention(message);
   if (!intentions.length) return;
 
-  // Atualiza módulos de interesse detectados
   const moduleIntentions = intentions.filter(i =>
     !['preco', 'especialista'].includes(i)
   );
@@ -356,13 +388,13 @@ export async function processCrmFromMessage(lead, message) {
     await updateLead(lead.id, { interested_modules: merged });
   }
 
-  // Se demonstrou intenção de contratar → avança pro especialista
+  // Lead pediu especialista → avança pra quente automaticamente
   if (intentions.includes('especialista') && lead.stage === STAGES.QUALIFICADO) {
     await advanceStage(lead.id, STAGES.ESPECIALISTA, 'mel',
       'Lead pediu para falar com especialista');
   }
 
-  // Se ainda é novo_lead e já tem intenção clara → qualifica automaticamente
+  // Lead novo com intenção clara → qualifica e vai pra morno
   if (lead.stage === STAGES.NOVO_LEAD && moduleIntentions.length > 0) {
     await advanceStage(lead.id, STAGES.QUALIFICADO, 'mel',
       `Intenção detectada: ${moduleIntentions.join(', ')}`);

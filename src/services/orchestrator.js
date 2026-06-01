@@ -61,4 +61,5 @@ export function loadKnowledge(clientKey) {
   }
 }
 
-export default loadKnowledge;
+export { handleIncomingMessage };
+export default handleIncomingMessage;

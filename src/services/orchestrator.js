@@ -63,21 +63,13 @@ function hasImportSession(company, from) {
 
 // ── Detecta canal (WhatsApp ou Instagram) ────────────────────
 function detectChannel(payload) {
-  const entry   = payload?.entry?.[0];
-  const changes = entry?.changes?.[0];
-  const field   = changes?.field;
+  // Instagram usa entry[0].messaging (sem changes)
+  // WhatsApp usa entry[0].changes[0].value
+  const entry = payload?.entry?.[0];
 
-  // Instagram: field = "messages" mas vem de página do Instagram
-  // WhatsApp:  field = "messages" mas vem com phone_number_id
-  const value = changes?.value;
-
-  if (value?.metadata?.phone_number_id) return "whatsapp";
-  if (field === "messages" && value?.sender_action !== undefined) return "instagram";
-  if (entry?.id === INSTAGRAM_PAGE_ID) return "instagram";
-
-  // Fallback: tenta detectar pelo formato da mensagem
-  const msg = value?.messages?.[0];
-  if (msg?.from && !value?.metadata?.phone_number_id) return "instagram";
+  if (payload?.object === "instagram") return "instagram";
+  if (entry?.messaging)                return "instagram";
+  if (entry?.changes)                  return "whatsapp";
 
   return "whatsapp";
 }
@@ -98,22 +90,23 @@ function getWhatsAppPayload(payload) {
 }
 
 // ── Parser Instagram ──────────────────────────────────────────
+// Formato real: entry[0].messaging[0].message.text
 function getInstagramPayload(payload) {
-  const entry   = payload?.entry?.[0];
-  const changes = entry?.changes?.[0];
-  const value   = changes?.value;
-  const message = value?.messages?.[0];
+  const messaging = payload?.entry?.[0]?.messaging?.[0];
+  const message   = messaging?.message;
+  const from      = messaging?.sender?.id;
+  const text      = message?.text || "";
 
-  // Instagram manda o texto direto em message.text (sem .body)
-  const text = message?.text?.body || message?.text || "";
+  // Ignora eventos sem mensagem (edições, reações, etc)
+  const isStatusOnly = !message || !text;
 
   return {
     channel:       "instagram",
     phoneNumberId: INSTAGRAM_PAGE_ID,
-    message,
-    from:          message?.from || value?.sender?.id,
+    message:       message || null,
+    from,
     text:          String(text),
-    isStatusOnly:  !message
+    isStatusOnly
   };
 }
 

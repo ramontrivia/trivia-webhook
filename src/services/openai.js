@@ -33,6 +33,28 @@ function isGreetingOnly(text = "") {
   ].some((item) => msg === normalizeText(item));
 }
 
+// ── Monta o contexto do lead pra injetar no prompt ───────────
+// Usa o que já foi coletado na conversa anterior.
+// Só inclui campos que existem — nunca inventa.
+function buildLeadContext(lead) {
+  if (!lead) return "";
+
+  const parts = [];
+
+  if (lead.name)             parts.push(`Nome: ${lead.name}`);
+  if (lead.business_name)    parts.push(`Empresa: ${lead.business_name}`);
+  if (lead.business_type)    parts.push(`Segmento: ${lead.business_type}`);
+  if (lead.city)             parts.push(`Cidade: ${lead.city}`);
+  if (lead.pain_description) parts.push(`Dor identificada: ${lead.pain_description}`);
+  if (lead.interested_modules?.length) {
+    parts.push(`Módulos de interesse: ${lead.interested_modules.join(', ')}`);
+  }
+
+  if (!parts.length) return "";
+
+  return `CONTEXTO DO LEAD (informações já coletadas em conversas anteriores):\n${parts.join('\n')}`;
+}
+
 export async function generateResponse({
   text,
   userMessage,
@@ -41,7 +63,7 @@ export async function generateResponse({
   company,
   from,
   healthPriority,
-  lead           // ← lead completo vindo do orchestrator (com lead_phase)
+  lead
 }) {
   try {
     console.log("🧠 GERANDO RESPOSTA...");
@@ -60,29 +82,44 @@ export async function generateResponse({
     // ── Knowledge base (personalidade, regras, tom) ──────────
     const knowledge = loadKnowledge(company?.client_key);
 
-    // ── Fase do lead (frio / morno / quente) ─────────────────
-    // Se o lead existir e tiver fase definida, injeta o comportamento.
-    // Default = frio (lead novo ou desconhecido entra desconfiado).
-    const leadPhase     = lead?.lead_phase || "frio";
-    const phaseContent  = loadKnowledgePhase(company?.client_key, leadPhase);
+    // ── Fase do lead ─────────────────────────────────────────
+    const leadPhase    = lead?.lead_phase || "frio";
+    const phaseContent = loadKnowledgePhase(company?.client_key, leadPhase);
 
     console.log(`🎯 FASE DO LEAD: ${leadPhase} | from: ${from}`);
 
     const hasAssistantMessage = history.some((item) => item.role === "assistant");
+
+    // ── Contexto do lead (memória de conversas anteriores) ───
+    const leadContext = buildLeadContext(lead);
 
     const cityContext =
       context && String(context).trim().length > 0
         ? String(context).trim()
         : "";
 
+    // ── Instrução de retorno (quando lead já conversou antes) ─
+    // Evita que a MEL se apresente de novo como se fosse primeira vez.
+    const returnInstruction = hasAssistantMessage
+      ? `IMPORTANTE: Você já conversou com esta pessoa antes. 
+NÃO se apresente novamente. NÃO diga "Oi! Sou a Mel da TRÍVIA".
+Retome a conversa de forma natural e calorosa, como quem reencontra alguém conhecido.
+Se tiver contexto do lead acima, use essas informações naturalmente — sem citar que você "tem registrado" ou "tem no sistema".
+Exemplo de retomada: "Oi! Que bom te ver de novo 😊" ou simplesmente responda direto ao que a pessoa perguntou.`
+      : "";
+
     // ── System prompt final ───────────────────────────────────
     // Ordem intencional:
     // 1. Knowledge base (quem a Mel é, sempre)
-    // 2. Dados de comércio, se houver
-    // 3. Regras fixas do sistema
-    // 4. Comportamento da fase atual (por último = maior peso no modelo)
+    // 2. Contexto do lead (memória — o que já sabe sobre a pessoa)
+    // 3. Dados de comércio, se houver
+    // 4. Regras fixas do sistema
+    // 5. Instrução de retorno (se já conversou)
+    // 6. Comportamento da fase atual (por último = maior peso)
     const systemPrompt = `
 ${knowledge || "Você é um assistente útil, direto e educado."}
+
+${leadContext ? `\n${leadContext}\n` : ""}
 
 REGRAS DO SISTEMA:
 - Nunca invente telefone
@@ -91,21 +128,26 @@ REGRAS DO SISTEMA:
 - Nunca invente preço
 - Use somente dados fornecidos
 - Nunca fale sobre inteligência artificial, robô ou tecnologia interna
+- Nunca use markdown nas respostas (sem asteriscos, sem listas com traço, sem negrito)
+- Escreva sempre em texto corrido, natural, como uma conversa de WhatsApp
 ${cityContext ? `\nDADOS ENCONTRADOS:\n${cityContext}` : ""}
 ${cityContext ? "Se houver dados, use. Se não houver, responda com naturalidade sem inventar." : ""}
 
+${returnInstruction ? `\n${returnInstruction}\n` : ""}
 ${phaseContent ? `\n${phaseContent}` : ""}
 `.trim();
 
     // ── Conteúdo da mensagem do usuário ──────────────────────
     let userContent = finalText;
 
+    // Primeira interação — sem histórico
     if (!hasAssistantMessage && isGreetingOnly(finalText)) {
-      userContent = `Primeira interação do usuário (saudação). Responda conforme sua personalidade. Mensagem: ${finalText}`;
+      userContent = `Primeira interação do usuário (saudação). Apresente-se como Mel da TRÍVIA e faça a pergunta de abertura sobre vendas. Mensagem: ${finalText}`;
     }
     if (!hasAssistantMessage && !isGreetingOnly(finalText)) {
-      userContent = `Primeira interação com pedido. Responda direto ao ponto. Pedido: ${finalText}`;
+      userContent = `Primeira interação com pedido direto. Apresente-se brevemente e responda ao pedido. Pedido: ${finalText}`;
     }
+
     if (healthPriority) {
       userContent += "\nSe for saúde, priorize serviços públicos.";
     }

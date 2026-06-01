@@ -18,6 +18,7 @@ export const STAGES = {
   IMPLANTACAO:  'implantacao',
   CLIENTE_ATIVO:'cliente_ativo',
   PERDIDO:      'perdido',
+  EM_ATENDIMENTO: 'em_atendimento',
 };
 
 // ============================================================

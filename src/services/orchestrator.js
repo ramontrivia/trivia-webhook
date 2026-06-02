@@ -230,7 +230,7 @@ async function sendInstagramMessage({ to, message }) {
     }
 
     await axios.post(
-      `https://graph.facebook.com/${GRAPH_VERSION}/me/messages`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/928736843663356/messages`,
       {
         recipient: { id: to },
         message:   { text: message },

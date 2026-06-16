@@ -33,6 +33,8 @@ const ADMIN_PHONES   = ["553199646223"];
 const importSessions = new Map();
 
 // ── Instagram Page ID da TRIVIA ───────────────────────────────
+// ID OFICIAL confirmado no Meta Business Manager (Contas do Instagram)
+// @trivia.tecnologia → Identificação: 17841402938162053
 const INSTAGRAM_PAGE_ID = "17841402938162053";
 const INSTAGRAM_TOKEN   = process.env.INSTAGRAM_TOKEN;
 const GRAPH_VERSION     = process.env.GRAPH_VERSION || "v19.0";
@@ -222,6 +224,8 @@ async function sendSafe({ company, to, message }) {
 }
 
 // ── Enviar mensagem pelo Instagram ────────────────────────────
+// CORRIGIDO: usa INSTAGRAM_PAGE_ID (ID oficial confirmado no Meta Business)
+// em vez do ID fixo incorreto que estava hardcoded.
 async function sendInstagramMessage({ to, message }) {
   try {
     if (!INSTAGRAM_TOKEN) {
@@ -230,12 +234,11 @@ async function sendInstagramMessage({ to, message }) {
     }
 
     await axios.post(
-      `https://graph.facebook.com/${GRAPH_VERSION}/928736843663356/messages`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${INSTAGRAM_PAGE_ID}/messages`,
       {
         recipient: { id: to },
         message:   { text: message },
-        messaging_type: "RESPONSE",
-        access_token: INSTAGRAM_TOKEN
+        messaging_type: "RESPONSE"
       },
       {
         headers: {

@@ -132,6 +132,12 @@ function isHealthQuestion(text = "") {
   ].some((term) => msg.includes(term));
 }
 
+// ── Gatilho especial: QR Code do evento BNI Relevo ────────────
+function isBniTrigger(text = "") {
+  const msg = normalize(text);
+  return msg.includes("bni relevo") || msg.includes("evento bni");
+}
+
 function buildContext(items = []) {
   if (!Array.isArray(items) || items.length === 0) return "";
   return items
@@ -497,7 +503,8 @@ export async function handleIncomingMessage(payload) {
       company,
       from,
       healthPriority,
-      lead
+      lead,
+      eventTrigger: isBniTrigger(text)
     });
     if (!reply) reply = "Não consegui responder agora.";
 

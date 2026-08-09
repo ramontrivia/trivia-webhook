@@ -449,6 +449,25 @@ export async function handleIncomingMessage(payload) {
 
     // ── Fluxo WhatsApp (original) ─────────────────────────────
 
+    // ═══════════════════════════════════════════════════════════
+    // MODO TESTE — DIAGNÓSTICO TEMPORÁRIO
+    // Responde uma frase fixa SEM passar pela IA e SEM ler
+    // nenhum arquivo de knowledge.
+    //
+    // Se a MEL responder a frase abaixo  → este código está no ar.
+    // Se responder qualquer outra coisa  → outro sistema responde.
+    //
+    // DEPOIS DO TESTE: trocar true por false na linha seguinte.
+    // ═══════════════════════════════════════════════════════════
+    const MODO_TESTE = true;
+
+    if (MODO_TESTE) {
+      const replyTeste = "PIRULITO AZUL 4477 — teste da Trivia, ignore esta mensagem.";
+      console.log("🧪 MODO TESTE ATIVO — respondendo frase fixa para:", from);
+      await sendSafe({ company, to: from, message: replyTeste });
+      return;
+    }
+
     // Admin flow
     if (isAdmin(from)) {
       const handledByAdmin = await handleAdminMessage({ company, from, text, message });

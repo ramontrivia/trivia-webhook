@@ -111,18 +111,37 @@ Exemplo de retomada: "Oi! Que bom te ver de novo 😊" ou simplesmente responda 
 
     // ── Contexto especial: gatilho do evento BNI Relevo ───────
     const eventContext = eventTrigger ? `
-INSTRUÇÃO ESPECIAL — EVENTO BNI RELEVO:
-Esta pessoa acabou de escanear o QR Code da TRÍVIA no evento BNI Relevo e mandou
-mensagem pelo WhatsApp na hora, ao vivo, ainda com o celular na mão olhando o QR Code.
-Ela quer ver a tecnologia funcionando de verdade, não uma demonstração morna.
+============================================================
+INSTRUÇÃO ESPECIAL — EVENTO BNI RELEVO (PRIORIDADE MÁXIMA)
+============================================================
 
-Na primeira frase, surpreenda: mostre que você já sabe que ela está no evento agora,
-nesse exato momento. Seja espirituosa, genuína, curta — nunca pareça script.
-Não use a abertura padrão "Oi! Sou a Mel da TRÍVIA...".
-Essa abertura precisa ser única, feita sob medida pra esse instante.
-Depois conecte com o que a TRÍVIA faz: atendimento que nunca dorme, nunca some,
-nunca deixa cliente esperando — exatamente como ela respondeu agora, na hora.
-Termine com uma pergunta leve pra engajar (nome ou ramo do negócio dela).
+ESTA INSTRUÇÃO SUBSTITUI COMPLETAMENTE A FASE 1 PADRÃO DO DOCUMENTO
+DE PERSONALIDADE. Ignore a abertura obrigatória "Oi! Sou a Mel da TRÍVIA...
+Me conta... hoje o seu atendimento está convertendo clientes ou deixando
+dinheiro na mesa?". Essa abertura NÃO deve ser usada agora. Esta pessoa
+não é um lead frio comum — ela escaneou o QR Code da TRÍVIA ao vivo,
+no evento BNI Relevo, e está com o celular na mão nesse exato momento
+esperando ser surpreendida.
+
+TOM DESTA ABERTURA: ousadia e diferenciação. A TRÍVIA não é só mais uma
+empresa de atendimento — é tecnologia acima da média do mercado, e a
+resposta dela precisa provar isso na prática, na hora, sem pedir licença.
+
+O QUE FAZER:
+1. Na primeira frase, mostre que você já sabe que ela está no evento
+   BNI Relevo agora, nesse instante — isso é o efeito surpresa.
+2. Não explique que é um bot, não fale em IA, não seja técnica.
+3. Seja direta, confiante, um pouco provocadora — sem ser arrogante.
+   Deixe claro que o nível de tecnologia que ela acabou de ver na prática
+   está acima do que a maioria das empresas oferece.
+4. NÃO fale sobre "atendimento", "perda de vendas" ou "dinheiro na mesa"
+   nesta abertura — isso é do roteiro padrão, não cabe aqui.
+5. Feche com uma pergunta curta e fácil de responder, que prenda a
+   pessoa na conversa (ex: perguntar o nome ou o ramo do negócio dela).
+6. Seja curta. No máximo 3-4 frases. Nada de texto longo.
+
+Depois desta abertura, a conversa pode seguir o fluxo natural normal.
+============================================================
 `.trim() : "";
 
     // ── System prompt final ───────────────────────────────────
@@ -158,11 +177,12 @@ ${eventContext ? `\n${eventContext}` : ""}
     // ── Conteúdo da mensagem do usuário ──────────────────────
     let userContent = finalText;
 
-    // Primeira interação — sem histórico
-    if (!hasAssistantMessage && isGreetingOnly(finalText)) {
+    // Gatilho do evento BNI Relevo tem prioridade sobre qualquer outra lógica de abertura
+    if (eventTrigger) {
+      userContent = `Mensagem recebida via QR Code do evento BNI Relevo: "${finalText}". Siga EXATAMENTE a INSTRUÇÃO ESPECIAL — EVENTO BNI RELEVO do system prompt para montar sua resposta. Não use a abertura padrão da Fase 1.`;
+    } else if (!hasAssistantMessage && isGreetingOnly(finalText)) {
       userContent = `Primeira interação do usuário (saudação). Apresente-se como Mel da TRÍVIA e faça a pergunta de abertura sobre vendas. Mensagem: ${finalText}`;
-    }
-    if (!hasAssistantMessage && !isGreetingOnly(finalText)) {
+    } else if (!hasAssistantMessage && !isGreetingOnly(finalText)) {
       userContent = `Primeira interação com pedido direto. Apresente-se brevemente e responda ao pedido. Pedido: ${finalText}`;
     }
 

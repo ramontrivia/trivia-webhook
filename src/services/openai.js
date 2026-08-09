@@ -13,16 +13,53 @@ function normalizeText(text = "") {
     .trim();
 }
 
+// ── Frases do posicionamento ANTIGO da TRÍVIA ────────────────
+// Respostas antigas da MEL ficaram salvas no banco. Quando o
+// histórico é injetado na chamada, o modelo lê essas mensagens
+// como exemplo do próprio comportamento e REPETE o padrão velho,
+// ignorando o knowledge novo. Este filtro descarta essas mensagens
+// do histórico antes de enviar pro modelo.
+const FRASES_POSICIONAMENTO_ANTIGO = [
+  "dinheiro na mesa",
+  "organizado ou corrido",
+  "tranquilo ou corrido",
+  "tecnologia em atendimento",
+  "atendimento bem feito vira venda",
+  "convertendo clientes",
+  "seu atendimento esta",
+  "atendimento te consumindo",
+  "perde mais cliente hoje"
+];
+
+function ehRespostaAntiga(content = "") {
+  const msg = normalizeText(content);
+  return FRASES_POSICIONAMENTO_ANTIGO.some((frase) =>
+    msg.includes(normalizeText(frase))
+  );
+}
+
 function normalizeHistory(history) {
   if (!Array.isArray(history)) return [];
-  return history
+
+  const limpo = history
     .filter((item) => item && ["user", "assistant"].includes(item.role))
     .map((item) => ({
       role:    item.role,
       content: String(item.content || item.message || "").trim()
     }))
     .filter((item) => item.content.length > 0)
+    .filter((item) => {
+      // Só descarta mensagens da MEL. Mensagens do usuário ficam.
+      if (item.role !== "assistant") return true;
+      if (ehRespostaAntiga(item.content)) {
+        console.log("🧹 HISTÓRICO: descartada resposta do posicionamento antigo");
+        return false;
+      }
+      return true;
+    })
     .slice(-10);
+
+  return limpo;
 }
 
 function isGreetingOnly(text = "") {

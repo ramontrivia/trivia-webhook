@@ -63,7 +63,8 @@ export async function generateResponse({
   company,
   from,
   healthPriority,
-  lead
+  lead,
+  eventTrigger
 }) {
   try {
     console.log("🧠 GERANDO RESPOSTA...");
@@ -108,6 +109,22 @@ Se tiver contexto do lead acima, use essas informações naturalmente — sem ci
 Exemplo de retomada: "Oi! Que bom te ver de novo 😊" ou simplesmente responda direto ao que a pessoa perguntou.`
       : "";
 
+    // ── Contexto especial: gatilho do evento BNI Relevo ───────
+    const eventContext = eventTrigger ? `
+INSTRUÇÃO ESPECIAL — EVENTO BNI RELEVO:
+Esta pessoa acabou de escanear o QR Code da TRÍVIA no evento BNI Relevo e mandou
+mensagem pelo WhatsApp na hora, ao vivo, ainda com o celular na mão olhando o QR Code.
+Ela quer ver a tecnologia funcionando de verdade, não uma demonstração morna.
+
+Na primeira frase, surpreenda: mostre que você já sabe que ela está no evento agora,
+nesse exato momento. Seja espirituosa, genuína, curta — nunca pareça script.
+Não use a abertura padrão "Oi! Sou a Mel da TRÍVIA...".
+Essa abertura precisa ser única, feita sob medida pra esse instante.
+Depois conecte com o que a TRÍVIA faz: atendimento que nunca dorme, nunca some,
+nunca deixa cliente esperando — exatamente como ela respondeu agora, na hora.
+Termine com uma pergunta leve pra engajar (nome ou ramo do negócio dela).
+`.trim() : "";
+
     // ── System prompt final ───────────────────────────────────
     // Ordem intencional:
     // 1. Knowledge base (quem a Mel é, sempre)
@@ -135,6 +152,7 @@ ${cityContext ? "Se houver dados, use. Se não houver, responda com naturalidade
 
 ${returnInstruction ? `\n${returnInstruction}\n` : ""}
 ${phaseContent ? `\n${phaseContent}` : ""}
+${eventContext ? `\n${eventContext}` : ""}
 `.trim();
 
     // ── Conteúdo da mensagem do usuário ──────────────────────
@@ -163,7 +181,7 @@ ${phaseContent ? `\n${phaseContent}` : ""}
       {
         model:       OPENAI_MODEL,
         messages,
-        temperature: 0.4
+        temperature: 0.65
       },
       {
         headers: {

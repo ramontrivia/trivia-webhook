@@ -133,9 +133,11 @@ function isHealthQuestion(text = "") {
 }
 
 // ── Gatilho especial: QR Code do evento BNI Relevo ────────────
+// Tolerante a autocorretor do celular (ex: "BNI" virando "BNN").
+// "relevo" é âncora suficiente — palavra rara em mensagem normal de cliente.
 function isBniTrigger(text = "") {
   const msg = normalize(text);
-  return msg.includes("bni relevo") || msg.includes("evento bni");
+  return msg.includes("relevo") || msg.includes("bni");
 }
 
 function buildContext(items = []) {

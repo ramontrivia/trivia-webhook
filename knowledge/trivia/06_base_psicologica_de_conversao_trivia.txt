@@ -43,7 +43,7 @@ Se ele disser:
 “Está muito corrido aqui.”
 
 Mel valida:
-“Imagino. Quando o volume aumenta, o WhatsApp vira uma avalanche.”
+"Imagino. Quando o negócio cresce, tudo vira urgência ao mesmo tempo."
 
 Validação gera abertura.
 

@@ -1,115 +1,100 @@
 ===========================================
 TRÍVIA — BASE INSTITUCIONAL OFICIAL
+AGÊNCIA DE SOLUÇÕES DIGITAIS
 ===========================================
 
 [IDENTIDADE DA MARCA]
 
 Nome: TRÍVIA
-Categoria: Solução de atendimento inteligente via WhatsApp
-Posicionamento: Tecnologia elegante com atendimento humanizado
-Natureza: Estruturação e profissionalização do atendimento digital
+Categoria: Agência completa de soluções digitais
+Frase-âncora: "Do cartão de visita à inteligência artificial."
 
-A TRÍVIA foi criada para organizar o caos invisível do atendimento via WhatsApp.
-Ela não é apenas uma automação de respostas.
-Ela é uma estrutura estratégica de comunicação.
+A TRÍVIA cuida de como a empresa APARECE pra fora
+e de como ela se ORGANIZA por dentro.
 
-===========================================
-
-[PROPÓSITO]
-
-Organizar a comunicação digital das empresas.
-Reduzir ruído.
-Padronizar processos.
-Aumentar eficiência.
-Elevar o nível profissional do atendimento.
-
-A TRÍVIA transforma conversas desordenadas em processos estruturados.
+Não é agência de marketing.
+Não é empresa de software.
+É as duas coisas, na mesma casa, com a mesma cabeça.
 
 ===========================================
 
-[PROBLEMA QUE RESOLVE]
+[DE ONDE A TRÍVIA VEM — A AUTORIDADE]
 
-Empresas utilizam o WhatsApp como principal canal de contato,
-porém operam sem método.
+A TRÍVIA nasceu dentro da operação industrial, não dentro
+de uma agência de publicidade.
 
-Problemas comuns:
+O fundador trabalha com controle de produção em mineração —
+ambiente onde erro custa caro, dado é levado a sério e
+decisão precisa acontecer em tempo real.
 
-- Mensagens acumuladas
-- Respostas repetitivas
-- Perda de informações
-- Agendamentos conflitantes
-- Orçamentos incompletos
-- Conversas desorganizadas
-- Sobrecarga operacional
-- Perda de oportunidades de venda
+Essa mentalidade foi trazida pro mundo das empresas comuns:
+método de indústria aplicado ao comércio e ao serviço.
 
-A TRÍVIA atua exatamente nesse ponto crítico:
-cria ordem onde antes havia improviso.
+Isso é o que separa a TRÍVIA de quem só fez curso de Instagram.
+
+===========================================
+
+[AS TRÊS FRENTES DE ATUAÇÃO]
+
+───────────────────────────────
+FRENTE 1 — MARCA E PRESENÇA
+"Como sua empresa aparece pra fora"
+───────────────────────────────
+
+• Identidade visual completa (logo, paleta, aplicação de marca)
+• Material impresso: cartão de visita, panfleto, folder, banner,
+  fachada, cardápio, papelaria, adesivo, uniforme
+• Gestão de redes sociais: conteúdo, calendário, design de post,
+  legenda, stories, acompanhamento
+• Sites e landing pages
+• Presença no Google (perfil da empresa, mapa, avaliações)
+
+───────────────────────────────
+FRENTE 2 — ATENDIMENTO E RELACIONAMENTO
+"Como sua empresa conversa com o cliente"
+───────────────────────────────
+
+• Agente inteligente de atendimento no WhatsApp, 24 horas
+• Agendamento automático
+• Orçamento guiado
+• CRM e funil de vendas
+• Campanhas e disparos para base de clientes
+• Automações de follow-up, lembrete e pós-venda
+
+───────────────────────────────
+FRENTE 3 — CONTROLE INTERNO E INTELIGÊNCIA
+"Como sua empresa se organiza por dentro"
+───────────────────────────────
+
+• Painéis e dashboards de indicadores
+• Relatórios gerenciais
+• Automação de processos e planilhas
+• Organização e leitura de dados operacionais
+• Transformar achismo em número
 
 ===========================================
 
 [O QUE A TRÍVIA NÃO É]
 
-- Não é um robô genérico.
-- Não é um disparador automático de mensagens.
-- Não substitui o atendimento humano.
-- Não é uma ferramenta improvisada.
+- Não é freelancer de design.
+- Não é social media que só posta.
+- Não é revenda de ferramenta pronta.
+- Não é agência que entrega bonito e some.
 
 ===========================================
 
-[O QUE A TRÍVIA É]
+[O DIFERENCIAL REAL]
 
-- Uma estrutura de atendimento.
-- Um filtro inteligente de intenções.
-- Um organizador de fluxo.
-- Um captador estratégico de dados.
-- Um facilitador de conversão.
+A maior parte do mercado entrega UMA coisa:
+ou o visual, ou o site, ou o bot, ou a planilha.
 
-===========================================
+A TRÍVIA entrega o conjunto — e entende como as peças
+se conectam, porque vem de um ambiente onde processo
+integrado é obrigação, não diferencial.
 
-[COMO FUNCIONA]
-
-A TRÍVIA opera integrada à API oficial do WhatsApp (Meta).
-
-Etapas operacionais:
-
-1. Recebe a mensagem inicial.
-2. Identifica a intenção do cliente.
-3. Coleta dados relevantes.
-4. Responde de forma natural e humanizada.
-5. Direciona conforme o fluxo definido.
-6. Organiza o registro da interação.
-7. Encaminha leads qualificados ao comercial.
-
-===========================================
-
-[ESTRUTURA MODULAR]
-
-Plano Base:
-Atendente virtual humanizada com fluxo inicial estruturado.
-
-Módulos adicionais:
-- Agendamento inteligente
-- Gestão de pedidos
-- Orçamentos estruturados
-- Relatórios organizacionais
-- Fluxos personalizados por segmento
-
-Cada implementação é adaptada à realidade do negócio.
-
-===========================================
-
-[DIFERENCIAL ESTRATÉGICO]
-
-- Linguagem natural.
-- Experiência do cliente preservada.
-- Organização real do atendimento.
-- Estruturação de funil.
-- Identificação de lead quente.
-- Encaminhamento estratégico.
-
-A TRÍVIA não busca apenas responder.
-Busca profissionalizar.
+Amplitude: do impresso à inteligência artificial.
+Profundidade: método de indústria.
+Proximidade: atendimento direto, sem camada de agência.
 
 ===========================================
 
@@ -117,21 +102,15 @@ Busca profissionalizar.
 
 Empresas que:
 
-- Utilizam WhatsApp como canal principal.
-- Recebem alto volume de mensagens.
-- Precisam organizar agendamentos.
-- Precisam estruturar pedidos/orçamentos.
-- Desejam profissionalizar o atendimento.
-- Desejam aumentar conversão.
+- Querem profissionalizar a imagem da marca
+- Precisam organizar a comunicação com o cliente
+- Querem enxergar os próprios números
+- Estão crescendo e perderam o controle do processo
+- Cansaram de contratar cinco fornecedores diferentes
 
-Segmentos comuns:
-Salões
-Clínicas
-Restaurantes
-Lojas
-Imobiliárias
-Prestadores de serviço
-Pequenas e médias empresas
+Segmentos: comércio de rua, salões, clínicas, restaurantes,
+lojas, construtoras, prestadores de serviço, indústria de
+pequeno e médio porte, profissionais liberais.
 
 ===========================================
 
@@ -139,54 +118,52 @@ Pequenas e médias empresas
 
 A TRÍVIA é:
 
-Séria.
-Minimalista.
+Técnica.
+Direta.
 Elegante.
-Estruturada.
-Profissional.
+Moderna.
+Confiável.
 
-Não vende promessas exageradas.
-Entrega método.
-
-Não cria complexidade.
-Cria organização.
-
-===========================================
-
-[VISÃO]
-
-Transformar o atendimento via WhatsApp em um processo estruturado,
-eficiente e escalável.
+Não promete milagre.
+Entrega método e execução.
 
 ===========================================
 
 [MISSÃO]
 
-Elevar o padrão de comunicação digital das empresas.
+Levar tecnologia de ponta e comunicação profissional
+para empresas que ainda decidem no feeling.
+
+===========================================
+
+[VISÃO]
+
+Ser a referência em soluções digitais completas —
+onde a empresa resolve marca, atendimento e controle
+em um lugar só.
 
 ===========================================
 
 [VALORES]
 
-Clareza.
-Organização.
-Elegância.
-Humanização.
-Eficiência.
-Responsabilidade.
+Clareza. Método. Execução.
+Estética. Honestidade. Resultado.
 
 ===========================================
 
 [RESUMO EXECUTIVO]
 
-A TRÍVIA é uma solução inteligente de atendimento via WhatsApp,
-desenvolvida para organizar, automatizar e estruturar a comunicação
-entre empresas e clientes.
+A TRÍVIA é uma agência completa de soluções digitais.
 
-Ela transforma conversas em processo.
-Processo em organização.
-Organização em eficiência.
-Eficiência em crescimento.
+Cuida da imagem da empresa — identidade visual, impressos,
+redes sociais, site.
+
+Cuida do relacionamento — atendimento inteligente, CRM,
+automação.
+
+Cuida do controle — dashboards, indicadores, processo.
+
+Do cartão de visita à inteligência artificial.
 
 ===========================================
 FIM DO DOCUMENTO
